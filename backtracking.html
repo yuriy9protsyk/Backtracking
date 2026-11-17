@@ -1,0 +1,3522 @@
+<!DOCTYPE html>
+<html lang="uk" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Алгоритм Бектрекінгу — Інтерактивне пояснення (Стор. 214)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          keyframes: {
+            pulseGlow: {
+              '0%, 100%': { transform: 'scale(1)', opacity: '1' },
+              '50%': { transform: 'scale(1.08)', opacity: '0.85' },
+            },
+            shake: {
+              '0%, 100%': { transform: 'translateX(0)' },
+              '25%': { transform: 'translateX(-4px)' },
+              '75%': { transform: 'translateX(4px)' },
+            }
+          },
+          animation: {
+            'pulse-glow': 'pulseGlow 1.6s infinite ease-in-out',
+            'shake': 'shake 0.35s ease-in-out 2',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Custom styling for SVG elements and smooth transitions */
+    .svg-node {
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      cursor: pointer;
+    }
+    .svg-node:hover {
+      filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.6));
+    }
+    .svg-edge {
+      transition: stroke 0.3s ease, stroke-width 0.3s ease, opacity 0.3s ease;
+    }
+    .tree-node-group {
+      cursor: pointer;
+      transition: transform 0.2s ease, opacity 0.25s ease;
+    }
+    .tree-node-group:hover rect,
+    .tree-node-group:hover circle {
+      stroke-width: 2.5px;
+      filter: drop-shadow(0 0 6px rgba(99, 102, 241, 0.5));
+    }
+    @keyframes dashFlow {
+      to {
+        stroke-dashoffset: -24;
+      }
+    }
+    .animated-edge {
+      stroke-dasharray: 8 4;
+      animation: dashFlow 0.8s linear infinite;
+    }
+    @keyframes conflictPulse {
+      0%, 100% { stroke-width: 4px; opacity: 1; }
+      50% { stroke-width: 8px; opacity: 0.65; }
+    }
+    .conflict-edge {
+      animation: conflictPulse 0.8s ease-in-out infinite;
+    }
+    /* Анімація пульсації атакуючого ферзя (Вкладка 3) */
+    @keyframes pulse-attacker {
+      0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.85);
+      }
+      50% {
+        transform: scale(1.08);
+        box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+      }
+    }
+    .attacker-highlight {
+      animation: pulse-attacker 1.1s infinite ease-in-out;
+      border-color: #ef4444 !important;
+      background-color: rgba(239, 68, 68, 0.28) !important;
+      z-index: 25;
+    }
+    @keyframes shake-conflict {
+      0%, 100% { transform: translateX(0); }
+      20% { transform: translateX(-6px); }
+      40% { transform: translateX(6px); }
+      60% { transform: translateX(-4px); }
+      80% { transform: translateX(4px); }
+    }
+    .shake-cell {
+      animation: shake-conflict 0.4s ease-in-out;
+    }
+    .attack-ray {
+      transition: opacity 0.22s ease, stroke-width 0.22s ease;
+    }
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.3);
+      border-radius: 9999px;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 min-h-screen font-sans transition-colors duration-200 selection:bg-indigo-500 selection:text-white">
+
+  <!-- COMPACT TOP HEADER -->
+  <header class="border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur sticky top-0 z-30">
+    <div class="max-w-7xl mx-auto px-3 sm:px-5 py-1.5">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <!-- Title & Badge -->
+        <div class="flex items-center gap-2">
+          <div class="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-emerald-500 flex items-center justify-center text-white font-bold text-sm shadow-sm">
+            ↺
+          </div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-sm sm:text-base font-extrabold tracking-tight text-slate-900 dark:text-white leading-none">
+              Алгоритм бектрекінгу
+            </h1>
+            <span class="text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-semibold hidden md:inline-block">Стор. 214</span>
+          </div>
+        </div>
+
+        <!-- NAVIGATION TABS (INLINE IN HEADER) -->
+        <div class="flex flex-wrap items-center gap-1.5 order-3 lg:order-2 w-full lg:w-auto justify-center">
+          <button id="tabBtn-1" onclick="switchTab(1)" class="tab-btn px-2.5 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 bg-slate-200/70 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300/70 dark:hover:bg-slate-700">
+            <span>🕸️ 1. Гамільтонів цикл</span>
+            <span class="px-1 py-0.2 text-[10px] rounded bg-slate-300 dark:bg-slate-700 hidden sm:inline">Рис. 5.28</span>
+          </button>
+          <button id="tabBtn-2" onclick="switchTab(2)" class="tab-btn px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 bg-indigo-600 text-white shadow-sm shadow-indigo-500/25">
+            <span>🎨 2. Розфарбування (6 кольорів)</span>
+          </button>
+          <button id="tabBtn-3" onclick="switchTab(3)" class="tab-btn px-2.5 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 bg-slate-200/70 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300/70 dark:hover:bg-slate-700">
+            <span>♕ 3. Задача про 4 ферзів</span>
+            <span class="px-1 py-0.2 text-[10px] rounded bg-slate-300 dark:bg-slate-700 hidden sm:inline">Рис. 5.30</span>
+          </button>
+        </div>
+
+        <!-- Quick utility buttons -->
+        <div class="flex items-center gap-1.5 order-2 lg:order-3">
+          <button onclick="document.getElementById('mentalModelBar').classList.toggle('hidden')" class="px-2 py-1 rounded-lg text-[11px] font-medium border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition flex items-center gap-1" title="Показати/сховати шпаргалку з 3 правил">
+            <span>💡</span>
+            <span class="hidden sm:inline">3 правила</span>
+          </button>
+          <button id="soundToggleBtn" onclick="toggleSound()" class="px-2 py-1 rounded-lg text-[11px] font-medium border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition flex items-center gap-1" title="Увімкнути/вимкнути звукові підказки">
+            <span id="soundIcon">🔊</span>
+          </button>
+          <button onclick="toggleTheme()" class="px-2 py-1 rounded-lg text-[11px] font-medium border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition flex items-center gap-1" title="Змінити тему">
+            <span id="themeIcon">☀️</span>
+            <span id="themeText" class="hidden xl:inline">Світла</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- COMPACT COLLAPSIBLE 3-STEP MENTAL MODEL -->
+      <div id="mentalModelBar" class="hidden mt-1.5 grid grid-cols-1 md:grid-cols-3 gap-1.5 bg-slate-100/80 dark:bg-slate-800/60 p-1.5 rounded-lg border border-slate-200/80 dark:border-slate-700/70 text-[11px]">
+        <div class="flex items-center gap-1.5 px-2 py-1 rounded bg-emerald-500/10 border border-emerald-500/20">
+          <span class="w-4 h-4 rounded-full bg-emerald-500 text-white font-bold text-[10px] flex items-center justify-center shrink-0">1</span>
+          <div class="truncate">
+            <span class="font-bold text-emerald-700 dark:text-emerald-300">Вперед за списком:</span>
+            <span class="text-slate-600 dark:text-slate-300"> бери перший доступний варіант.</span>
+          </div>
+        </div>
+        <div class="flex items-center gap-1.5 px-2 py-1 rounded bg-rose-500/10 border border-rose-500/20">
+          <span class="w-4 h-4 rounded-full bg-rose-500 text-white font-bold text-[10px] flex items-center justify-center shrink-0">2</span>
+          <div class="truncate">
+            <span class="font-bold text-rose-700 dark:text-rose-300">Глухий кут?</span>
+            <span class="text-slate-600 dark:text-slate-300"> Не починай з нуля!</span>
+          </div>
+        </div>
+        <div class="flex items-center gap-1.5 px-2 py-1 rounded bg-amber-500/10 border border-amber-500/20">
+          <span class="w-4 h-4 rounded-full bg-amber-500 text-white font-bold text-[10px] flex items-center justify-center shrink-0">3</span>
+          <div class="truncate">
+            <span class="font-bold text-amber-700 dark:text-amber-300">Backtrack (Ctrl+Z):</span>
+            <span class="text-slate-600 dark:text-slate-300"> повернись на <b>1 крок назад</b>.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTENT CONTAINER -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 py-3">
+
+    <!-- ===================================================================== -->
+    <!-- TAB 1: HAMILTONIAN CYCLE (FIG 5.28a & 5.28b)                          -->
+    <!-- ===================================================================== -->
+    <section id="tabContent-1" class="hidden space-y-4">
+      <!-- Top Control & Status Bar -->
+      <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+        <div class="space-y-1 max-w-2xl">
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 text-xs font-bold rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">Ціль задачі</span>
+            <h2 class="text-base sm:text-lg font-bold">Побудова гамільтонових циклів у графі (Рис. 5.28)</h2>
+          </div>
+          <p class="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
+            Вийти з вершини <code class="font-mono font-bold text-indigo-600 dark:text-indigo-400">a</code>, обійти <b>всі 5 вершин по одному разу</b> і повернутися назад у <code class="font-mono font-bold text-indigo-600 dark:text-indigo-400">a</code>. Клікайте на підсвічені зелені вершини графа ліворуч або на вузли дерева праворуч!
+          </p>
+        </div>
+
+        <!-- Action Controls -->
+        <div class="flex flex-wrap items-center gap-2 w-full lg:w-auto justify-start lg:justify-end">
+          <button id="hamBacktrackBtn" onclick="hamManualBacktrack()" class="px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-sm transition flex items-center gap-1.5 disabled:opacity-40 disabled:pointer-events-none">
+            <span>⬅ Крок назад (Backtrack)</span>
+          </button>
+          <button onclick="hamStepPrev()" class="px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 transition" title="Попередній крок алгоритму">
+            ⏮
+          </button>
+          <button id="hamNextStepBtn" onclick="hamStepNext()" class="px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm transition flex items-center gap-1.5">
+            <span>Крок алгоритму ➡</span>
+          </button>
+          <button id="hamAutoBtn" onclick="hamToggleAuto()" class="px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition flex items-center gap-1.5">
+            <span id="hamAutoIcon">▶</span>
+            <span id="hamAutoText">Авто-обхід</span>
+          </button>
+          <button onclick="hamReset()" class="px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+            🔄 Скинути
+          </button>
+        </div>
+      </div>
+
+      <!-- Quick Instant Demo Scenarios Bar -->
+      <div class="flex flex-wrap items-center gap-2 text-xs">
+        <span class="font-semibold text-slate-500 dark:text-slate-400">⚡ Швидкі сценарії для розуміння за 10 секунд:</span>
+        <button onclick="hamJumpToNode('abcde')" class="px-2.5 py-1 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-700 dark:text-rose-300 border border-rose-500/30 font-medium transition">
+          1. Показати глухий кут (a→b→c→d→e ❌)
+        </button>
+        <button onclick="hamJumpToNode('abceda')" class="px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-700 dark:text-amber-300 border border-amber-500/30 font-medium transition">
+          2. Після Backtrack: Перший цикл [abceda] 🏆
+        </button>
+        <button onclick="hamJumpToNode('abedc')" class="px-2.5 py-1 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-700 dark:text-rose-300 border border-rose-500/30 font-medium transition">
+          3. Глухий кут у гілці (a→b→e→d→c ❌)
+        </button>
+      </div>
+
+      <!-- Live Explanation Banner -->
+      <div id="hamStatusBox" class="rounded-2xl p-4 border-2 transition-all duration-300 bg-emerald-500/10 border-emerald-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div class="flex items-start sm:items-center gap-3">
+          <div id="hamStatusBadge" class="w-10 h-10 rounded-xl bg-emerald-500 text-white font-extrabold flex items-center justify-center text-lg shrink-0 shadow">
+            ▶
+          </div>
+          <div>
+            <div class="flex flex-wrap items-center gap-2">
+              <span id="hamCurrentPathText" class="font-mono font-bold text-sm sm:text-base px-2 py-0.5 rounded bg-white/80 dark:bg-slate-900/80 text-indigo-600 dark:text-indigo-400 border border-slate-200 dark:border-slate-700">
+                Шлях: a
+              </span>
+              <span id="hamStateLabel" class="text-xs font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
+                Початок пошуку
+              </span>
+            </div>
+            <p id="hamStatusMessage" class="text-xs sm:text-sm text-slate-700 dark:text-slate-200 mt-1">
+              Ми стоїмо у стартовій вершині <b>a</b>. Доступні сусіди за алфавітом: <b>b</b> або <b>d</b> (ребра між <b>a</b> та <b>e</b> у графі немає!). Клікніть на вершину <b>b</b> або натисніть «Крок алгоритму ➡».
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Split View: 5.28a (Graph) + 5.28b (Decision Tree) -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 items-start">
+        
+        <!-- LEFT: Fig 5.28a Interactive Graph (5 cols) -->
+        <div class="lg:col-span-5 bg-white dark:bg-slate-900 rounded-2xl p-3.5 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col gap-2">
+          <div class="flex items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-2">
+            <div>
+              <h3 class="font-bold text-sm sm:text-base flex items-center gap-2">
+                <span>Рис. 5.28, а — Граф</span>
+                <span class="text-xs font-normal text-slate-500">(Інтерактивний)</span>
+              </h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400">Клікайте на зелені вершини, щоб будувати маршрут</p>
+            </div>
+            <span class="text-xs font-mono px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 shrink-0">5 вершин, 7 ребер</span>
+          </div>
+
+          <!-- SVG Graph 5.28a -->
+          <div class="relative w-full aspect-square max-h-[340px] mx-auto flex items-center justify-center">
+            <svg id="hamGraphSvg" viewBox="0 0 400 360" class="w-full h-full select-none">
+              <defs>
+                <filter id="glowGreen" x="-30%" y="-30%" width="160%" height="160%">
+                  <feDropShadow dx="0" dy="0" stdDeviation="6" flood-color="#10b981" flood-opacity="0.7"/>
+                </filter>
+                <filter id="glowRed" x="-30%" y="-30%" width="160%" height="160%">
+                  <feDropShadow dx="0" dy="0" stdDeviation="7" flood-color="#f43f5e" flood-opacity="0.8"/>
+                </filter>
+                <filter id="glowGold" x="-30%" y="-30%" width="160%" height="160%">
+                  <feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="#f59e0b" flood-opacity="0.85"/>
+                </filter>
+              </defs>
+
+              <!-- Graph Edges Group -->
+              <g id="hamGraphEdges"></g>
+
+              <!-- Missing Edge Hint Line (a-e dashed red when in dead end at e or c) -->
+              <g id="hamMissingEdgeGroup" class="hidden">
+                <line id="hamMissingLine" x1="65" y1="180" x2="200" y2="180" stroke="#f43f5e" stroke-width="3.5" stroke-dasharray="6 6" />
+                <rect id="hamMissingBadgeBg" x="95" y="164" width="76" height="22" rx="6" fill="#f43f5e" />
+                <text id="hamMissingBadgeText" x="133" y="179" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="bold">Немає ребра!</text>
+              </g>
+
+              <!-- Graph Vertices Group -->
+              <g id="hamGraphNodes"></g>
+            </svg>
+          </div>
+
+          <!-- Legend for Graph -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px]">
+            <div class="flex items-center gap-1.5">
+              <span class="w-3 h-3 rounded-full bg-emerald-500 inline-block ring-4 ring-emerald-500/20"></span>
+              <span>Можна сходити</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <span class="w-3 h-3 rounded-full bg-indigo-600 inline-block"></span>
+              <span>Вже у маршруті</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <span class="w-3 h-3 rounded-full bg-rose-500 inline-block"></span>
+              <span>Глухий кут (Тупик)</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <span class="w-3 h-3 rounded-full bg-amber-500 inline-block"></span>
+              <span>Цикл знайдено!</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT: Fig 5.28b Synchronized Decision Tree (7 cols) -->
+        <div class="lg:col-span-7 bg-white dark:bg-slate-900 rounded-2xl p-3.5 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col gap-2">
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-2">
+            <div>
+              <h3 class="font-bold text-sm sm:text-base flex items-center gap-2">
+                <span>Рис. 5.28, б — Дерево пошуку з поверненням</span>
+              </h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400">Клікніть на будь-який вузол дерева, щоб миттєво перейти до цього стану</p>
+            </div>
+            <div class="flex items-center gap-2 text-xs">
+              <span class="px-2 py-0.5 rounded border border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400 font-mono font-semibold">[рамка] = Розв'язок</span>
+              <span class="px-2 py-0.5 rounded border border-rose-500/40 bg-rose-500/10 text-rose-600 dark:text-rose-400 font-mono font-semibold">без рамки = Тупик</span>
+            </div>
+          </div>
+
+          <!-- SVG Decision Tree 5.28b -->
+          <div class="w-full overflow-x-auto flex items-center justify-center">
+            <svg id="hamTreeSvg" viewBox="0 0 680 390" class="w-full min-w-[540px] h-auto select-none">
+              <g id="hamTreeEdges"></g>
+              <g id="hamTreeNodes"></g>
+            </svg>
+          </div>
+
+          <!-- Bottom insight from textbook -->
+          <div class="pt-2 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs text-slate-600 dark:text-slate-400">
+            <div>
+              💡 <b>Чому <code class="font-mono text-rose-500">abcde</code> та <code class="font-mono text-rose-500">abedc</code> — глухі кути?</b> Бо з останньої вершини (<code class="font-mono">e</code> або <code class="font-mono">c</code>) немає прямої лінії назад у старт <code class="font-mono">a</code>!
+            </div>
+            <div class="font-mono text-[11px] shrink-0 text-indigo-600 dark:text-indigo-400 font-semibold">
+              Знайдено циклів: 4 з 8 гілок
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 2: GRAPH COLORING (6 COLORS + NEIGHBOR CONFLICT DEMO)             -->
+    <!-- ===================================================================== -->
+    <section id="tabContent-2" class="space-y-3">
+      <!-- Top Control & Explanation Bar -->
+      <div class="bg-white dark:bg-slate-900 rounded-2xl p-3.5 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col xl:flex-row items-start xl:items-center justify-between gap-3">
+        <div class="space-y-0.5 max-w-2xl">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="px-2 py-0.5 text-xs font-bold rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">Абзаци 1–3 на стор. 214</span>
+            <h2 class="text-base sm:text-lg font-bold">Розфарбування графа: правило сусідів та пошук з поверненням</h2>
+          </div>
+          <p class="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
+            <b>Головна заборона:</b> дві сусідні вершини (з'єднані ребром) <b>НЕ можуть мати однаковий колір</b>! Алгоритм перебирає кольори за списком <code class="font-mono font-bold text-indigo-600 dark:text-indigo-400">1 → 2 → 3 → … → n</code>, а в глухому куті робить <b>Backtrack</b>.
+          </p>
+        </div>
+
+        <!-- Quick Demo & Walkthrough Controls -->
+        <div class="flex flex-wrap items-center gap-1.5">
+          <button onclick="colTriggerForbiddenDemo()" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white shadow-sm shadow-rose-500/20 transition flex items-center gap-1.5" title="Наочно показати, що буде, якщо пофарбувати сусідні вершини в один колір">
+            <span>🚫 Показати заборонений хід (однакові сусіди)</span>
+          </button>
+          <button onclick="colLoadDeadEndDemo()" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-sm transition flex items-center gap-1.5" title="Показати ситуацію, коли 3 кольорів не вистачає і потрібен Backtrack">
+            <span>⚡ Тупик + Backtrack</span>
+          </button>
+          <button onclick="colStepPrev()" class="px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 transition" title="Попередній крок">
+            ⬅ Назад
+          </button>
+          <button onclick="colStepNext()" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm transition">
+            Крок алгоритму ➡
+          </button>
+          <button onclick="colReset()" class="px-2.5 py-1.5 rounded-xl text-xs font-semibold border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+            🔄 Спочатку
+          </button>
+        </div>
+      </div>
+
+      <!-- Settings Bar: Color Limit (n = 2..6) + Graph Structure Selector -->
+      <div class="bg-slate-100/90 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-2xl px-3.5 py-2.5 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-2.5">
+        <!-- Max Allowed Colors n Selector -->
+        <div class="flex flex-wrap items-center gap-1.5">
+          <span class="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+            <span>🎨 Ліміт кольорів <code class="font-mono text-indigo-600 dark:text-indigo-400">n</code>:</span>
+          </span>
+          <div id="colLimitBtns" class="flex flex-wrap items-center gap-1">
+            <button onclick="colSetMaxColors(2)" id="colLimitBtn-2" class="px-2 py-1 rounded-lg text-xs font-semibold transition border">
+              n = 2 (Мало ❌)
+            </button>
+            <button onclick="colSetMaxColors(3)" id="colLimitBtn-3" class="px-2 py-1 rounded-lg text-xs font-semibold transition border">
+              n = 3 (Як у книзі 📖)
+            </button>
+            <button onclick="colSetMaxColors(4)" id="colLimitBtn-4" class="px-2 py-1 rounded-lg text-xs font-semibold transition border">
+              n = 4
+            </button>
+            <button onclick="colSetMaxColors(5)" id="colLimitBtn-5" class="px-2 py-1 rounded-lg text-xs font-semibold transition border">
+              n = 5
+            </button>
+            <button onclick="colSetMaxColors(6)" id="colLimitBtn-6" class="px-2 py-1 rounded-lg text-xs font-semibold transition border">
+              n = 6 (Вся палітра 🌈)
+            </button>
+          </div>
+        </div>
+
+        <!-- Scenario / Graph Selector -->
+        <div class="flex flex-wrap items-center gap-2 w-full lg:w-auto justify-between lg:justify-end">
+          <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">Сценарій графа:</span>
+          <select id="colScenarioSelect" onchange="colChangeScenario(this.value)" class="text-xs font-semibold rounded-xl px-2.5 py-1 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700">
+            <option value="backtrack">Сценарій 1: Примусовий Бектрекінг (Тупик на вершині e при n=3)</option>
+            <option value="simple">Сценарій 2: Граф із Рис. 5.28а (Ромб із центром e)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Live Status & Conflict Explanation Banner for Coloring -->
+      <div id="colStatusBox" class="rounded-2xl p-3 border-2 transition-all duration-300 bg-indigo-500/10 border-indigo-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+        <div class="flex items-start sm:items-center gap-2.5">
+          <div id="colStatusIcon" class="w-9 h-9 rounded-xl bg-indigo-600 text-white font-bold flex items-center justify-center text-lg shrink-0 shadow">
+            🎨
+          </div>
+          <div>
+            <div class="flex flex-wrap items-center gap-2">
+              <span id="colStepCounter" class="font-mono text-xs font-bold px-2 py-0.5 rounded bg-white/80 dark:bg-slate-900/80 text-indigo-600 dark:text-indigo-400 border border-slate-200 dark:border-slate-700">Крок 1</span>
+              <span id="colStatusTitle" class="font-bold text-sm">Готові до розфарбування</span>
+            </div>
+            <p id="colStatusDesc" class="text-xs text-slate-700 dark:text-slate-200 mt-0.5">
+              Клікніть на будь-яку вершину графа та спробуйте дати їй такий самий колір, як у сусіда, або натисніть «🚫 Показати заборонений хід»!
+            </p>
+          </div>
+        </div>
+
+        <!-- Auto-fix button shown whenever there is a neighbor color conflict or dead end -->
+        <div id="colFixActionWrap" class="hidden shrink-0">
+          <button onclick="colAutoFixConflict()" class="px-3.5 py-2 rounded-xl text-xs font-extrabold bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/30 transition flex items-center gap-1.5 animate-pulse-glow">
+            <span>🔧 Виправити: взяти наступний дозволений колір</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Split View: Interactive Coloring Graph + 6-Color Palette & Inspector Table -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 items-start">
+        <!-- Left: SVG Graph for Coloring + Interactive 6-Color Palette (6 cols) -->
+        <div class="lg:col-span-6 bg-white dark:bg-slate-900 rounded-2xl p-3.5 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col gap-2.5">
+          <div class="flex items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-2">
+            <div>
+              <h3 class="font-bold text-sm sm:text-base leading-tight">Інтерактивне полотно розфарбування</h3>
+              <p class="text-[11px] text-slate-500 dark:text-slate-400">1. Оберіть вершину на графі • 2. Клікніть будь-який із 6 кольорів нижче</p>
+            </div>
+            <span id="colSelectedVertexBadge" class="px-2.5 py-1 rounded-lg font-mono text-xs font-extrabold bg-indigo-600 text-white shadow-sm shrink-0">
+              Обрано вершину: a
+            </span>
+          </div>
+
+          <!-- Interactive 6-Color Palette with Live Neighbor Conflict Warnings -->
+          <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700/80 space-y-1.5">
+            <div class="flex flex-wrap items-center justify-between gap-1 text-xs">
+              <span class="font-bold text-slate-700 dark:text-slate-200">
+                Палітра кольорів для вершини <code id="colPaletteVertexName" class="font-mono text-indigo-600 dark:text-indigo-400 font-extrabold">a</code>:
+              </span>
+              <span class="text-[11px] text-slate-500 dark:text-slate-400">
+                Клікніть колір з ⚠️, щоб побачити конфлікт сусідів!
+              </span>
+            </div>
+            <div id="colPaletteButtonsGrid" class="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+              <!-- Dynamically populated with 6 colors + Clear button -->
+            </div>
+          </div>
+
+          <!-- SVG Graph Canvas (Directly adjacent with no gap) -->
+          <div class="relative w-full h-[290px] sm:h-[310px] mx-auto flex items-center justify-center bg-slate-50/50 dark:bg-slate-950/40 rounded-xl border border-slate-100 dark:border-slate-800/80">
+            <svg id="colGraphSvg" viewBox="0 0 440 320" class="w-full h-full select-none">
+              <g id="colGraphEdges"></g>
+              <g id="colGraphConflictLabels"></g>
+              <g id="colGraphNodes"></g>
+            </svg>
+          </div>
+
+          <!-- Legend Footer -->
+          <div class="flex flex-wrap items-center justify-between gap-2 pt-1.5 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400">
+            <div class="flex items-center gap-1.5">
+              <span class="inline-block w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping"></span>
+              <span><b>Червоне пульсуюче ребро</b> = Заборонено! Сусіди одного кольору.</span>
+            </div>
+            <button onclick="colAutoColorAll()" class="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline">
+              ✨ Авто-розфарбувати весь граф
+            </button>
+          </div>
+        </div>
+
+        <!-- Right: Step-by-Step Color Availability Matrix (6 cols) -->
+        <div class="lg:col-span-6 bg-white dark:bg-slate-900 rounded-2xl p-3.5 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col gap-2.5">
+          <div class="flex items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-2">
+            <div>
+              <h3 class="font-bold text-sm sm:text-base leading-tight">Матриця перевірки кольорів для кожної вершини</h3>
+              <p class="text-[11px] text-slate-500 dark:text-slate-400">Натискайте прямо на кольорові плашки у рядку будь-якої вершини, щоб перевірити хід</p>
+            </div>
+            <span id="colActiveLimitBadge" class="text-xs font-mono font-bold px-2.5 py-1 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 shrink-0">
+              Список: 1..6
+            </span>
+          </div>
+
+          <!-- Dynamic Vertex Color Inspector Cards -->
+          <div id="colInspectorList" class="space-y-1.5"></div>
+
+          <!-- Summary Box at bottom of right column -->
+          <div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 text-xs space-y-1">
+            <div class="font-bold text-amber-700 dark:text-amber-300 flex items-center gap-1.5">
+              <span>🔑 Як зрозуміти алгоритм зі стор. 214 за 15 секунд:</span>
+            </div>
+            <p class="text-slate-600 dark:text-slate-300 leading-relaxed text-[11px]">
+              1. <b>Чому не можна фарбувати сусідів в один колір?</b> Якщо вершини з'єднані ребром і мають однаковий колір, вони «зливаються» (конфлікт <code class="font-mono text-rose-500 font-bold">❌ ОДНАКОВИЙ КОЛІР</code>).<br>
+              2. <b>Що робить алгоритм?</b> Він завжди бере <u>перший дозволений колір</u> зі списку <code class="font-mono">1..n</code>. А якщо всі <code class="font-mono">n</code> кольорів зайняті сусідами (як при <code class="font-mono font-bold">n = 3</code> на кроці 5) — повертається до попередньої вершини (<b>Backtrack</b>) і змінює її колір на наступний!
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 3: 4-QUEENS TRAINER (EXACT RECREATION OF FIG. 5.30)               -->
+    <!-- ===================================================================== -->
+    <section id="tabContent-3" class="hidden space-y-3">
+      <!-- ВЕРХНЯ ПАНЕЛЬ ЗАДАЧІ ПРО 4 ФЕРЗІВ -->
+      <div class="bg-slate-900/95 border border-slate-800 rounded-2xl px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2.5 shadow-sm text-slate-100">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-400/40 flex items-center justify-center text-indigo-300 text-xl font-bold shadow-inner">
+            ♕
+          </div>
+          <div>
+            <h2 class="text-sm sm:text-base font-bold tracking-tight text-white flex items-center gap-2">
+              <span>Задача про 4 ферзів — Алгоритм бектрекінгу</span>
+              <span class="hidden sm:inline-block text-xs font-mono px-2 py-0.5 rounded-md bg-slate-800 text-indigo-300 border border-slate-700">Рис. 5.30</span>
+            </h2>
+            <p class="text-[11px] sm:text-xs text-slate-400">
+              Пошук з поверненням по стовпцях зліва направо, перевірка клітинок зверху вниз (1 → 4)
+            </p>
+          </div>
+        </div>
+
+        <!-- Перемикачі режимів та налаштувань -->
+        <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+          <div class="inline-flex rounded-xl bg-slate-950 p-1 border border-slate-800">
+            <button id="modeSimBtn" onclick="setMode('simulator')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all bg-indigo-600 text-white shadow">
+              ▶ Покроковий симулятор
+            </button>
+            <button id="modePracBtn" onclick="setMode('practice')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all text-slate-400 hover:text-slate-200">
+              ✋ Спробуй сам (Практика)
+            </button>
+          </div>
+
+          <label class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700/80 cursor-pointer hover:bg-slate-800 transition text-xs font-medium">
+            <input type="checkbox" id="toggleRaysCheckbox" checked onchange="toggleAttackRays(this.checked)" class="w-3.5 h-3.5 accent-rose-500 rounded cursor-pointer">
+            <span class="text-slate-200">Лінії бою</span>
+          </label>
+
+          <button id="markerStyleBtn" onclick="toggleMarkerStyle()" title="Перемкнути вигляд ферзя: Шахова іконка або хрестик × як у підручнику" class="px-2.5 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700/80 hover:bg-slate-800 text-xs font-mono text-slate-300 transition">
+            Фігура: <span id="markerStyleLabel" class="text-indigo-300 font-bold">♕ + ×</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ОСНОВНА РОБОЧА ЗОНА (2 КОЛОНКИ) -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 items-start text-slate-100">
+
+        <!-- ЛІВА КОЛОНКА: ШАХІВНИЦЯ 4x4 + ТЕЛЕМЕТРІЯ ТА КЕРУВАННЯ (5 колонок із 12) -->
+        <div class="lg:col-span-5 flex flex-col gap-3 bg-slate-900/90 border border-slate-800/90 rounded-2xl p-3.5 sm:p-4 shadow-xl">
+
+          <!-- Верхній рядок статусу дошки -->
+          <div class="flex items-center justify-between gap-2 border-b border-slate-800 pb-2.5">
+            <div class="flex items-center gap-2">
+              <span class="text-xs uppercase tracking-wider font-semibold text-slate-400">Кортеж стану:</span>
+              <span id="currentTupleBadge" class="font-mono text-sm sm:text-base font-bold px-2.5 py-0.5 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                λ (порожньо)
+              </span>
+            </div>
+            <div id="stepCounterBadge" class="text-xs font-mono text-slate-400 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800">
+              Крок 0 / 15
+            </div>
+          </div>
+
+          <!-- Пояснення координат кортежу -->
+          <div id="tupleDecodeBar" class="text-[11px] font-mono text-slate-400 bg-slate-950/70 px-3 py-1.5 rounded-xl border border-slate-800/80 flex flex-wrap items-center gap-x-3 gap-y-1 min-h-[30px]">
+            <span>Формат <strong class="text-slate-200">(r₁, r₂, r₃, r₄)</strong>: k-те число = номер рядка ферзя у k-му стовпці</span>
+          </div>
+
+          <!-- ВЕЛИКА ІНТЕРАКТИВНА ШАХІВНИЦЯ 4×4 -->
+          <div class="flex flex-col items-center justify-center my-1">
+            <div class="relative select-none">
+
+              <!-- Підпис осі стовпців зверху -->
+              <div class="text-center text-[11px] font-semibold uppercase tracking-wider text-indigo-300/90 mb-1 ml-8">
+                Стовпці (кроки алгоритму k = 1..4 зліва направо) →
+              </div>
+
+              <!-- Номери стовпців (1..4) -->
+              <div class="grid grid-cols-4 ml-8 mb-1 gap-1.5 w-[264px] sm:w-[308px]">
+                <div id="colHeader1" class="text-center font-mono text-xs py-1 rounded-md bg-slate-800/70 text-slate-300 border border-slate-700/60 transition-all">Стовп. 1</div>
+                <div id="colHeader2" class="text-center font-mono text-xs py-1 rounded-md bg-slate-800/70 text-slate-300 border border-slate-700/60 transition-all">Стовп. 2</div>
+                <div id="colHeader3" class="text-center font-mono text-xs py-1 rounded-md bg-slate-800/70 text-slate-300 border border-slate-700/60 transition-all">Стовп. 3</div>
+                <div id="colHeader4" class="text-center font-mono text-xs py-1 rounded-md bg-slate-800/70 text-slate-300 border border-slate-700/60 transition-all">Стовп. 4</div>
+              </div>
+
+              <div class="flex items-center">
+                <!-- Номери рядків зліва (1..4 зверху вниз) -->
+                <div class="flex flex-col justify-around mr-1.5 gap-1.5 h-[264px] sm:h-[308px] w-7">
+                  <div class="flex items-center justify-center h-full font-mono text-xs rounded-md bg-slate-800/70 text-slate-300 border border-slate-700/60" title="Рядок 1">1</div>
+                  <div class="flex items-center justify-center h-full font-mono text-xs rounded-md bg-slate-800/70 text-slate-300 border border-slate-700/60" title="Рядок 2">2</div>
+                  <div class="flex items-center justify-center h-full font-mono text-xs rounded-md bg-slate-800/70 text-slate-300 border border-slate-700/60" title="Рядок 3">3</div>
+                  <div class="flex items-center justify-center h-full font-mono text-xs rounded-md bg-slate-800/70 text-slate-300 border border-slate-700/60" title="Рядок 4">4</div>
+                </div>
+
+                <!-- Контейнер клітинок 4×4 + SVG-шар променів атаки -->
+                <div class="relative w-[264px] h-[264px] sm:w-[308px] sm:h-[308px] p-1.5 rounded-2xl bg-slate-950 border-2 border-slate-700 shadow-2xl">
+                  <!-- Сітка 4x4 -->
+                  <div id="boardGrid" class="grid grid-cols-4 grid-rows-4 gap-1.5 w-full h-full relative z-10">
+                    <!-- Генерується JS -->
+                  </div>
+
+                  <!-- SVG-шар для променів атаки ферзів (поверх клітинок, але пропускає кліки) -->
+                  <svg id="boardRaysSvg" viewBox="0 0 400 400" class="absolute inset-1.5 w-[calc(100%-12px)] h-[calc(100%-12px)] pointer-events-none z-20 overflow-visible"></svg>
+                </div>
+              </div>
+
+              <!-- Легенда позначень під дошкою -->
+              <div class="mt-2.5 ml-8 flex flex-wrap items-center justify-center gap-3 text-[11px] text-slate-400">
+                <span class="inline-flex items-center gap-1.5">
+                  <span class="w-3 h-3 rounded bg-indigo-500/40 border border-indigo-400 inline-block"></span> Ферзь
+                </span>
+                <span class="inline-flex items-center gap-1.5">
+                  <span class="w-3 h-3 rounded bg-rose-500/25 border border-rose-500/60 inline-block"></span> Під боєм (конфлікт)
+                </span>
+                <span class="inline-flex items-center gap-1.5">
+                  <span class="w-3 h-3 rounded border-2 border-amber-400 inline-block"></span> Сканер (перевірка 1→4)
+                </span>
+                <span class="inline-flex items-center gap-1.5">
+                  <span class="w-3 h-3 rounded bg-emerald-500/30 border border-emerald-400 inline-block"></span> Безпечний хід
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- ДИНАМІЧНИЙ БЛОК ПОЯСНЕННЯ / КОНФЛІКТУ -->
+          <div id="telemetryBox" class="rounded-xl p-3 bg-slate-950/90 border border-slate-800 transition-all min-h-[88px] flex flex-col justify-between">
+            <div class="flex items-center justify-between gap-2 mb-1">
+              <span id="telemetryBadge" class="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                Початок алгоритму
+              </span>
+              <span id="hoverHintLabel" class="text-[11px] text-slate-400 italic">
+                Наведіть на червону клітинку, щоб побачити, хто її б'є
+              </span>
+            </div>
+            <p id="telemetryText" class="text-xs sm:text-sm text-slate-200 leading-relaxed">
+              Починаємо з порожньої шахівниці <strong>λ</strong>. На кожному кроці ставимо ферзя у наступний стовпець, перевіряючи клітинки зверху вниз (від 1-ї до 4-ї).
+            </p>
+          </div>
+
+          <!-- ПАНЕЛЬ КЕРУВАННЯ ПЛЕЄРОМ (для Симулятора) -->
+          <div id="simulatorControls" class="flex flex-col gap-2.5 pt-1">
+            <!-- Основні кнопки кроків -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+              <button onclick="resetSimulator()" class="flex items-center justify-center gap-1 px-2.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition active:scale-95">
+                <span>⏮</span> <span>Скинути (λ)</span>
+              </button>
+              <button id="prevStepBtn" onclick="stepBackward()" class="flex items-center justify-center gap-1 px-2.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition active:scale-95">
+                <span>◀</span> <span>Крок назад</span>
+              </button>
+              <button id="nextStepBtn" onclick="stepForward()" class="flex items-center justify-center gap-1 px-2.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/25 transition active:scale-95">
+                <span>▶</span> <span>Крок (Детально)</span>
+              </button>
+              <button id="nextNodeBtn" onclick="jumpToNextTreeNode()" class="flex items-center justify-center gap-1 px-2.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-indigo-300 text-xs font-semibold border border-indigo-500/30 transition active:scale-95" title="Перейти одразу до наступного вузла дерева Рис. 5.30">
+                <span>⏭</span> <span>Наступний вузол</span>
+              </button>
+            </div>
+
+            <!-- Автопуск та швидкість -->
+            <div class="flex items-center justify-between gap-3 px-3 py-2 rounded-xl bg-slate-950/60 border border-slate-800/80">
+              <button id="autoPlayBtn" onclick="toggleAutoPlay()" class="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 text-xs font-semibold transition">
+                <span id="autoPlayIcon">▶</span>
+                <span id="autoPlayText">Автопуск</span>
+              </button>
+
+              <div class="flex items-center gap-2 flex-1 max-w-[220px]">
+                <span class="text-[11px] text-slate-400 whitespace-nowrap">Швидкість:</span>
+                <input id="speedSlider" type="range" min="400" max="2200" step="200" value="1200" onchange="updateSpeed(this.value)" class="w-full accent-indigo-500 cursor-pointer h-1.5 bg-slate-800 rounded-lg">
+              </div>
+            </div>
+          </div>
+
+          <!-- ПАНЕЛЬ КЕРУВАННЯ ДЛЯ РЕЖИМУ ПРАКТИКИ (прихована за замовчуванням) -->
+          <div id="practiceControls" class="hidden flex-col gap-2 pt-1">
+            <div class="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-indigo-950/30 border border-indigo-500/30">
+              <div class="text-xs text-indigo-200">
+                <strong>Режим практики:</strong> клікайте по клітинках стовпців зліва направо, щоб самостійно знайти розв'язок.
+              </div>
+              <div class="flex items-center gap-2">
+                <button onclick="practiceUndo()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 transition">
+                  ↩ Прибрати останнього
+                </button>
+                <button onclick="practiceClear()" class="px-3 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-xs font-semibold text-rose-300 border border-rose-500/40 transition">
+                  Очистити дошку
+                </button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- ПРАВА КОЛОНКА: ІНТЕРАКТИВНЕ ОРДЕРЕВО БЕКТРЕКІНГУ (Рис. 5.30) (7 колонок із 12) -->
+        <div class="lg:col-span-7 flex flex-col gap-3 bg-slate-900/90 border border-slate-800/90 rounded-2xl p-3.5 sm:p-4 shadow-xl">
+
+          <!-- Шапка дерева -->
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2.5">
+            <div>
+              <h3 class="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+                <span>Ордерево пошуку з поверненням (Точна схема Рис. 5.30)</span>
+              </h3>
+              <p class="text-[11px] text-slate-400">
+                Клікніть на будь-яку з 9 міні-шахівниць, щоб миттєво розглянути цей стан на головній дошці
+              </p>
+            </div>
+
+            <!-- Швидкі пресети гілок -->
+            <div class="flex items-center gap-1.5">
+              <button onclick="selectTreeNodeById('node_1_3')" class="px-2.5 py-1 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 text-[11px] font-medium transition">
+                Тупик 1: (1, 3)
+              </button>
+              <button onclick="selectTreeNodeById('node_1_4_2')" class="px-2.5 py-1 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 text-[11px] font-medium transition">
+                Тупик 2: (1, 4, 2)
+              </button>
+              <button onclick="selectTreeNodeById('node_2_4_1_3')" class="px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-[11px] font-medium transition">
+                Розв'язок: (2, 4, 1, 3)
+              </button>
+            </div>
+          </div>
+
+          <!-- Траса шляху від кореня λ (як у тексті підручника) -->
+          <div class="flex items-center gap-2 bg-slate-950/80 px-3 py-2 rounded-xl border border-slate-800 overflow-x-auto">
+            <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 whitespace-nowrap">Шлях у дереві:</span>
+            <div id="treePathBreadcrumbs" class="flex items-center gap-1.5 font-mono text-xs whitespace-nowrap">
+              <!-- Оновлюється динамічно -->
+            </div>
+          </div>
+
+          <!-- ПОЛОТНО ОРДЕРЕВА РИС. 5.30 -->
+          <div class="relative w-full overflow-x-auto py-1">
+            <div id="treeCanvasContainer" class="relative w-full min-w-[540px] h-[470px] sm:h-[490px] bg-slate-950/60 rounded-2xl border border-slate-800/80 p-3 select-none">
+
+              <!-- Підписи гілок угорі дерева -->
+              <div class="absolute top-3 left-4 text-[11px] font-semibold text-rose-400/90 bg-rose-950/40 border border-rose-500/30 px-2.5 py-1 rounded-lg">
+                ↙ Ліва гілка: 1-й ферзь у рядку 1 → веде у глухі кути
+              </div>
+              <div class="absolute top-3 right-4 text-[11px] font-semibold text-emerald-400/90 bg-emerald-950/40 border border-emerald-500/30 px-2.5 py-1 rounded-lg">
+                Права гілка: 1-й ферзь у рядку 2 → розв'язок ↘
+              </div>
+
+              <!-- Позначки глибини дерева k (кількість виставлених ферзів) -->
+              <div class="absolute left-2.5 top-[22px] text-[10px] font-mono text-slate-500">k = 0</div>
+              <div class="absolute left-2.5 top-[125px] text-[10px] font-mono text-slate-500">k = 1</div>
+              <div class="absolute left-2.5 top-[235px] text-[10px] font-mono text-slate-500">k = 2</div>
+              <div class="absolute left-2.5 top-[345px] text-[10px] font-mono text-slate-500">k = 3</div>
+              <div class="absolute left-2.5 top-[445px] text-[10px] font-mono text-slate-500">k = 4</div>
+
+              <!-- SVG ребра дерева + дуги бектрекінгу -->
+              <svg id="treeEdgesSvg" viewBox="0 0 700 490" preserveAspectRatio="none" class="absolute inset-0 w-full h-full pointer-events-none z-0"></svg>
+
+              <!-- HTML-вузли дерева (міні-шахівниці 4×4 з хрестиками ×) -->
+              <div id="treeNodesLayer" class="relative w-full h-full z-10">
+                <!-- Генерується JS -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Довідкова виноска з підручника -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-slate-400 bg-slate-950/50 p-2.5 rounded-xl border border-slate-800/80">
+            <div class="flex items-start gap-2">
+              <span class="text-indigo-400 font-bold text-sm leading-none mt-0.5">1.</span>
+              <span><strong>Правило стовпця:</strong> На (k+1)-му кроці ставимо ферзя у (k+1)-й стовпець, тому вертикальних конфліктів ніколи не виникає.</span>
+            </div>
+            <div class="flex items-start gap-2">
+              <span class="text-amber-400 font-bold text-sm leading-none mt-0.5">2.</span>
+              <span><strong>Порядок перевірки:</strong> Клітинки стовпця перевіряються строго зверху вниз (рядки 1 → 2 → 3 → 4) до першої безпечної.</span>
+            </div>
+            <div class="flex items-start gap-2">
+              <span class="text-rose-400 font-bold text-sm leading-none mt-0.5">3.</span>
+              <span><strong>Умова відкату:</strong> Якщо всі 4 клітинки стовпця під боєм, повертаємося у попередній стовпець і зсовуємо ферзя нижче.</span>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- JAVASCRIPT LOGIC FOR ALL 3 INTERACTIVE MODULES -->
+  <script>
+    /* =========================================================================
+       SOUND SYNTHESIZER (Web Audio API - No external files needed)
+       ========================================================================= */
+    let soundEnabled = true;
+    let audioCtx = null;
+
+    function playTone(type) {
+      if (!soundEnabled) return;
+      try {
+        if (!audioCtx) {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        const now = audioCtx.currentTime;
+        if (type === 'step') {
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(480, now);
+          osc.frequency.exponentialRampToValueAtTime(620, now + 0.08);
+          gain.gain.setValueAtTime(0.08, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+          osc.start(now);
+          osc.stop(now + 0.09);
+        } else if (type === 'deadend') {
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(240, now);
+          osc.frequency.linearRampToValueAtTime(150, now + 0.22);
+          gain.gain.setValueAtTime(0.09, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+          osc.start(now);
+          osc.stop(now + 0.24);
+        } else if (type === 'backtrack') {
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(420, now);
+          osc.frequency.exponentialRampToValueAtTime(310, now + 0.12);
+          gain.gain.setValueAtTime(0.09, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.13);
+          osc.start(now);
+          osc.stop(now + 0.13);
+        } else if (type === 'win') {
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(523.25, now); // C5
+          osc.frequency.setValueAtTime(659.25, now + 0.08); // E5
+          osc.frequency.setValueAtTime(783.99, now + 0.16); // G5
+          gain.gain.setValueAtTime(0.11, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+          osc.start(now);
+          osc.stop(now + 0.35);
+        }
+      } catch (e) {
+        // Ignore audio errors on restricted environments
+      }
+    }
+
+    function toggleSound() {
+      soundEnabled = !soundEnabled;
+      document.getElementById('soundIcon').textContent = soundEnabled ? '🔊' : '🔇';
+    }
+
+    /* =========================================================================
+       THEME & TAB NAVIGATION
+       ========================================================================= */
+    function toggleTheme() {
+      const html = document.documentElement;
+      const isDark = html.classList.toggle('dark');
+      document.getElementById('themeIcon').textContent = isDark ? '☀️' : '🌙';
+      document.getElementById('themeText').textContent = isDark ? 'Світла' : 'Темна';
+      renderHamiltonian();
+      renderColoring();
+      syncSimulatorView();
+    }
+
+    function switchTab(tabIndex) {
+      stopAllAutoTimers();
+      for (let i = 1; i <= 3; i++) {
+        const content = document.getElementById(`tabContent-${i}`);
+        const btn = document.getElementById(`tabBtn-${i}`);
+        if (i === tabIndex) {
+          content.classList.remove('hidden');
+          btn.className = "tab-btn px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 bg-indigo-600 text-white shadow-sm shadow-indigo-500/25";
+        } else {
+          content.classList.add('hidden');
+          btn.className = "tab-btn px-2.5 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 bg-slate-200/70 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300/70 dark:hover:bg-slate-700";
+        }
+      }
+      playTone('step');
+    }
+
+    function stopAllAutoTimers() {
+      if (hamAutoTimer) {
+        clearInterval(hamAutoTimer);
+        hamAutoTimer = null;
+        updateHamAutoButton();
+      }
+      if (typeof stopAutoPlay === 'function') {
+        stopAutoPlay();
+      }
+    }
+
+    /* =========================================================================
+       TAB 1: HAMILTONIAN CYCLE (EXACT RECREATION OF FIG 5.28a & 5.28b)
+       ========================================================================= */
+    // Exact vertex positions matching Fig 5.28a diamond layout
+    const hamVertices = {
+      a: { x: 55,  y: 180, label: 'a', labelDx: -22, labelDy: 5 },
+      b: { x: 200, y: 45,  label: 'b', labelDx: 0,   labelDy: -22 },
+      c: { x: 345, y: 180, label: 'c', labelDx: 22,  labelDy: 5 },
+      d: { x: 200, y: 315, label: 'd', labelDx: 0,   labelDy: 26 },
+      e: { x: 200, y: 180, label: 'e', labelDx: -18, labelDy: 4 }
+    };
+
+    // Exact adjacency list of Fig 5.28a (Note: 'a' is ONLY connected to 'b' and 'd')
+    const hamAdj = {
+      a: ['b', 'd'],
+      b: ['a', 'c', 'e'],
+      c: ['b', 'd', 'e'],
+      d: ['a', 'c', 'e'],
+      e: ['b', 'c', 'd']
+    };
+
+    const hamEdgeList = [
+      ['a', 'b'], ['a', 'd'],
+      ['b', 'c'], ['c', 'd'],
+      ['b', 'e'], ['e', 'd'],
+      ['c', 'e']
+    ];
+
+    // Exact Decision Tree nodes from Fig 5.28b with coordinates
+    const hamTreeData = [
+      // Level 0
+      { id: 'a',      parent: null,    x: 340, y: 28,  type: 'root' },
+      // Level 1
+      { id: 'ab',     parent: 'a',     x: 185, y: 82,  type: 'internal' },
+      { id: 'ad',     parent: 'a',     x: 495, y: 82,  type: 'internal' },
+      // Level 2
+      { id: 'abc',    parent: 'ab',    x: 105, y: 142, type: 'internal' },
+      { id: 'abe',    parent: 'ab',    x: 265, y: 142, type: 'internal' },
+      { id: 'adc',    parent: 'ad',    x: 415, y: 142, type: 'internal' },
+      { id: 'ade',    parent: 'ad',    x: 575, y: 142, type: 'internal' },
+      // Level 3
+      { id: 'abcd',   parent: 'abc',   x: 65,  y: 205, type: 'internal' },
+      { id: 'abce',   parent: 'abc',   x: 145, y: 205, type: 'internal' },
+      { id: 'abec',   parent: 'abe',   x: 225, y: 205, type: 'internal' },
+      { id: 'abed',   parent: 'abe',   x: 305, y: 205, type: 'internal' },
+      { id: 'adcb',   parent: 'adc',   x: 375, y: 205, type: 'internal' },
+      { id: 'adce',   parent: 'adc',   x: 455, y: 205, type: 'internal' },
+      { id: 'adeb',   parent: 'ade',   x: 535, y: 205, type: 'internal' },
+      { id: 'adec',   parent: 'ade',   x: 615, y: 205, type: 'internal' },
+      // Level 4
+      { id: 'abcde',  parent: 'abcd',  x: 65,  y: 272, type: 'deadend' },
+      { id: 'abced',  parent: 'abce',  x: 145, y: 272, type: 'internal' },
+      { id: 'abecd',  parent: 'abec',  x: 225, y: 272, type: 'internal' },
+      { id: 'abedc',  parent: 'abed',  x: 305, y: 272, type: 'deadend' },
+      { id: 'adcbe',  parent: 'adcb',  x: 375, y: 272, type: 'deadend' },
+      { id: 'adceb',  parent: 'adce',  x: 455, y: 272, type: 'internal' },
+      { id: 'adebc',  parent: 'adeb',  x: 535, y: 272, type: 'deadend' },
+      { id: 'adecb',  parent: 'adec',  x: 615, y: 272, type: 'internal' },
+      // Level 5 (Boxed Solutions in Fig 5.28b)
+      { id: 'abceda', parent: 'abced', x: 145, y: 342, type: 'solution' },
+      { id: 'abecda', parent: 'abecd', x: 225, y: 342, type: 'solution' },
+      { id: 'adceba', parent: 'adceb', x: 455, y: 342, type: 'solution' },
+      { id: 'adecba', parent: 'adecb', x: 615, y: 342, type: 'solution' }
+    ];
+
+    // Exact DFS + Backtracking sequence of states so student sees every forward step AND every backtrack step
+    const hamDfsSequence = [
+      { id: 'a',      action: 'start' },
+      { id: 'ab',     action: 'forward' },
+      { id: 'abc',    action: 'forward' },
+      { id: 'abcd',   action: 'forward' },
+      { id: 'abcde',  action: 'deadend' },
+      { id: 'abcd',   action: 'backtrack', from: 'abcde' },
+      { id: 'abc',    action: 'backtrack', from: 'abcd' },
+      { id: 'abce',   action: 'forward' },
+      { id: 'abced',  action: 'forward' },
+      { id: 'abceda', action: 'solution' },
+      { id: 'ab',     action: 'backtrack', from: 'abceda' },
+      { id: 'abe',    action: 'forward' },
+      { id: 'abec',   action: 'forward' },
+      { id: 'abecd',  action: 'forward' },
+      { id: 'abecda', action: 'solution' },
+      { id: 'abe',    action: 'backtrack', from: 'abecda' },
+      { id: 'abed',   action: 'forward' },
+      { id: 'abedc',  action: 'deadend' },
+      { id: 'a',      action: 'backtrack', from: 'abedc' },
+      { id: 'ad',     action: 'forward' },
+      { id: 'adc',    action: 'forward' },
+      { id: 'adcb',   action: 'forward' },
+      { id: 'adcbe',  action: 'deadend' },
+      { id: 'adc',    action: 'backtrack', from: 'adcbe' },
+      { id: 'adce',   action: 'forward' },
+      { id: 'adceb',  action: 'forward' },
+      { id: 'adceba', action: 'solution' },
+      { id: 'ad',     action: 'backtrack', from: 'adceba' },
+      { id: 'ade',    action: 'forward' },
+      { id: 'adeb',   action: 'forward' },
+      { id: 'adebc',  action: 'deadend' },
+      { id: 'ade',    action: 'backtrack', from: 'adebc' },
+      { id: 'adec',   action: 'forward' },
+      { id: 'adecb',  action: 'forward' },
+      { id: 'adecba', action: 'solution' }
+    ];
+
+    let hamCurrentId = 'a';
+    let hamSeqIndex = 0;
+    let hamVisitedTreeIds = new Set(['a']);
+    let hamLastAction = 'start';
+    let hamLastBacktrackFrom = null;
+    let hamAutoTimer = null;
+
+    function getHamValidNextVertices(pathStr) {
+      if (pathStr.length === 6) return []; // Already completed cycle
+      const lastChar = pathStr[pathStr.length - 1];
+      if (pathStr.length === 5) {
+        // All 5 vertices visited; check if last vertex has an edge back to 'a'
+        return hamAdj[lastChar].includes('a') ? ['a'] : [];
+      }
+      // Otherwise any unvisited neighbor
+      return hamAdj[lastChar].filter(v => !pathStr.includes(v));
+    }
+
+    function hamClickGraphVertex(v) {
+      if (hamAutoTimer) hamToggleAuto();
+      const validNext = getHamValidNextVertices(hamCurrentId);
+      if (validNext.includes(v)) {
+        const nextId = hamCurrentId + v;
+        hamSetStateById(nextId, 'manual');
+      } else if (hamCurrentId.length > 1 && hamCurrentId[hamCurrentId.length - 2] === v) {
+        // Clicking the previous vertex acts as a quick backtrack
+        hamManualBacktrack();
+      }
+    }
+
+    function hamManualBacktrack() {
+      if (hamAutoTimer) hamToggleAuto();
+      if (hamCurrentId.length <= 1) return;
+      const prevFrom = hamCurrentId;
+      const parentId = hamCurrentId.slice(0, -1);
+      hamLastBacktrackFrom = prevFrom;
+      hamLastAction = 'backtrack';
+      hamCurrentId = parentId;
+      hamVisitedTreeIds.add(parentId);
+      // Sync seqIndex to closest matching state
+      const idx = hamDfsSequence.findIndex(s => s.id === parentId);
+      if (idx !== -1) hamSeqIndex = idx;
+      playTone('backtrack');
+      renderHamiltonian();
+    }
+
+    function hamJumpToNode(nodeId) {
+      if (hamAutoTimer) hamToggleAuto();
+      // Mark all nodes up to this node in DFS sequence as visited for clear tree context
+      const targetIdx = hamDfsSequence.findIndex(s => s.id === nodeId);
+      if (targetIdx !== -1) {
+        hamSeqIndex = targetIdx;
+        hamVisitedTreeIds.clear();
+        for (let i = 0; i <= targetIdx; i++) {
+          hamVisitedTreeIds.add(hamDfsSequence[i].id);
+        }
+        hamCurrentId = nodeId;
+        hamLastAction = hamDfsSequence[targetIdx].action;
+        hamLastBacktrackFrom = hamDfsSequence[targetIdx].from || null;
+      } else {
+        hamSetStateById(nodeId, 'manual');
+      }
+      const nodeObj = hamTreeData.find(n => n.id === nodeId);
+      if (nodeObj?.type === 'deadend') playTone('deadend');
+      else if (nodeObj?.type === 'solution') playTone('win');
+      else playTone('step');
+      renderHamiltonian();
+    }
+
+    function hamSetStateById(nodeId, source) {
+      hamCurrentId = nodeId;
+      // Add all prefixes to visited
+      for (let i = 1; i <= nodeId.length; i++) {
+        hamVisitedTreeIds.add(nodeId.slice(0, i));
+      }
+      const nodeObj = hamTreeData.find(n => n.id === nodeId);
+      if (nodeObj?.type === 'deadend') {
+        hamLastAction = 'deadend';
+        playTone('deadend');
+      } else if (nodeObj?.type === 'solution') {
+        hamLastAction = 'solution';
+        playTone('win');
+      } else {
+        hamLastAction = source === 'backtrack' ? 'backtrack' : 'forward';
+        playTone('step');
+      }
+      const idx = hamDfsSequence.findIndex(s => s.id === nodeId);
+      if (idx !== -1) hamSeqIndex = idx;
+      renderHamiltonian();
+    }
+
+    function hamStepNext() {
+      if (hamSeqIndex < hamDfsSequence.length - 1) {
+        hamSeqIndex++;
+      } else {
+        hamSeqIndex = 0;
+        hamVisitedTreeIds.clear();
+      }
+      const stepObj = hamDfsSequence[hamSeqIndex];
+      hamCurrentId = stepObj.id;
+      hamVisitedTreeIds.add(stepObj.id);
+      hamLastAction = stepObj.action;
+      hamLastBacktrackFrom = stepObj.from || null;
+
+      if (stepObj.action === 'deadend') playTone('deadend');
+      else if (stepObj.action === 'solution') playTone('win');
+      else if (stepObj.action === 'backtrack') playTone('backtrack');
+      else playTone('step');
+
+      renderHamiltonian();
+    }
+
+    function hamStepPrev() {
+      if (hamAutoTimer) hamToggleAuto();
+      if (hamSeqIndex > 0) {
+        hamSeqIndex--;
+        const stepObj = hamDfsSequence[hamSeqIndex];
+        hamCurrentId = stepObj.id;
+        hamLastAction = stepObj.action;
+        hamLastBacktrackFrom = stepObj.from || null;
+        playTone('backtrack');
+        renderHamiltonian();
+      }
+    }
+
+    function hamToggleAuto() {
+      if (hamAutoTimer) {
+        clearInterval(hamAutoTimer);
+        hamAutoTimer = null;
+      } else {
+        hamAutoTimer = setInterval(() => {
+          if (hamSeqIndex >= hamDfsSequence.length - 1) {
+            clearInterval(hamAutoTimer);
+            hamAutoTimer = null;
+            updateHamAutoButton();
+            return;
+          }
+          hamStepNext();
+        }, 1150);
+      }
+      updateHamAutoButton();
+    }
+
+    function updateHamAutoButton() {
+      const icon = document.getElementById('hamAutoIcon');
+      const text = document.getElementById('hamAutoText');
+      if (hamAutoTimer) {
+        icon.textContent = '⏸';
+        text.textContent = 'Пауза';
+      } else {
+        icon.textContent = '▶';
+        text.textContent = 'Авто-обхід';
+      }
+    }
+
+    function hamReset() {
+      if (hamAutoTimer) hamToggleAuto();
+      hamCurrentId = 'a';
+      hamSeqIndex = 0;
+      hamVisitedTreeIds = new Set(['a']);
+      hamLastAction = 'start';
+      hamLastBacktrackFrom = null;
+      playTone('step');
+      renderHamiltonian();
+    }
+
+    function renderHamiltonian() {
+      const isDark = document.documentElement.classList.contains('dark');
+      const currentNodeObj = hamTreeData.find(n => n.id === hamCurrentId) || hamTreeData[0];
+      const validNext = getHamValidNextVertices(hamCurrentId);
+      const isDeadEnd = currentNodeObj.type === 'deadend';
+      const isSolution = currentNodeObj.type === 'solution';
+      const lastVertex = hamCurrentId[hamCurrentId.length - 1];
+
+      // 1. Update Status Banner & Backtrack Button
+      const backtrackBtn = document.getElementById('hamBacktrackBtn');
+      backtrackBtn.disabled = hamCurrentId.length <= 1;
+      if (isDeadEnd) {
+        backtrackBtn.classList.add('animate-pulse-glow', 'ring-4', 'ring-rose-500/50');
+      } else {
+        backtrackBtn.classList.remove('animate-pulse-glow', 'ring-4', 'ring-rose-500/50');
+      }
+
+      const statusBox = document.getElementById('hamStatusBox');
+      const statusBadge = document.getElementById('hamStatusBadge');
+      const pathText = document.getElementById('hamCurrentPathText');
+      const stateLabel = document.getElementById('hamStateLabel');
+      const statusMsg = document.getElementById('hamStatusMessage');
+
+      const formattedPath = hamCurrentId.split('').join(' → ');
+      pathText.textContent = `Шлях: ${formattedPath}`;
+
+      if (isDeadEnd) {
+        statusBox.className = "rounded-2xl p-4 border-2 transition-all duration-300 bg-rose-500/15 border-rose-500/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-shake";
+        statusBadge.className = "w-10 h-10 rounded-xl bg-rose-600 text-white font-extrabold flex items-center justify-center text-lg shrink-0 shadow";
+        statusBadge.textContent = "✕";
+        stateLabel.className = "text-xs font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400";
+        stateLabel.textContent = "Глухий кут (Тупик)!";
+        statusMsg.innerHTML = `Усі 5 вершин обійдено (<b>${hamCurrentId}</b>), але з вершини <b>«${lastVertex}»</b> <u>немає ребра назад у стартову вершину «a»</u>! Натисніть <b>«⬅ Крок назад (Backtrack)»</b>, щоб повернутися до розвилки і спробувати інший шлях.`;
+      } else if (isSolution) {
+        statusBox.className = "rounded-2xl p-4 border-2 transition-all duration-300 bg-amber-500/15 border-amber-500/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3";
+        statusBadge.className = "w-10 h-10 rounded-xl bg-amber-500 text-slate-950 font-extrabold flex items-center justify-center text-lg shrink-0 shadow";
+        statusBadge.textContent = "🏆";
+        stateLabel.className = "text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400";
+        stateLabel.textContent = "Гамільтонів цикл знайдено!";
+        statusMsg.innerHTML = `Чудово! Маршрут <b>[${hamCurrentId}]</b> обійшов усі 5 вершин по одному разу і замкнувся у вершині <b>a</b> (у книзі він обведений прямокутною рамкою). Можна шукати інші цикли далі!`;
+      } else if (hamLastAction === 'backtrack') {
+        statusBox.className = "rounded-2xl p-4 border-2 transition-all duration-300 bg-amber-500/10 border-amber-500/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3";
+        statusBadge.className = "w-10 h-10 rounded-xl bg-amber-500 text-slate-950 font-extrabold flex items-center justify-center text-lg shrink-0 shadow";
+        statusBadge.textContent = "↺";
+        stateLabel.className = "text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400";
+        stateLabel.textContent = "Повернення назад (Backtrack)";
+        statusMsg.innerHTML = `Ми повернулися назад до вузла <b>${hamCurrentId}</b> (скасували попередній вибір). Тепер обираємо наступну неперевірену сусідню вершину: <b>${validNext.join(' або ')}</b>.`;
+      } else {
+        statusBox.className = "rounded-2xl p-4 border-2 transition-all duration-300 bg-emerald-500/10 border-emerald-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3";
+        statusBadge.className = "w-10 h-10 rounded-xl bg-emerald-500 text-white font-extrabold flex items-center justify-center text-lg shrink-0 shadow";
+        statusBadge.textContent = "▶";
+        stateLabel.className = "text-xs font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300";
+        stateLabel.textContent = hamCurrentId.length === 5 ? "Замикання циклу!" : "Рух уперед (Доступні ходи)";
+        if (hamCurrentId.length === 5) {
+          statusMsg.innerHTML = `Усі 5 вершин пройдено! Із вершини <b>${lastVertex}</b> є пряме ребро назад у старт <b>a</b>. Клікніть на <b>a</b>, щоб замкнути гамільтонів цикл!`;
+        } else {
+          statusMsg.innerHTML = `Зараз ми у вершині <b>${lastVertex}</b>. Доступні невідвідані сусіди: <b>${validNext.join(', ')}</b> (підсвічені зеленим). Клікніть на вершину або натисніть «Крок алгоритму ➡».`;
+        }
+      }
+
+      // 2. Render Graph 5.28a
+      const edgesGroup = document.getElementById('hamGraphEdges');
+      const nodesGroup = document.getElementById('hamGraphNodes');
+      const missingGroup = document.getElementById('hamMissingEdgeGroup');
+      edgesGroup.innerHTML = '';
+      nodesGroup.innerHTML = '';
+
+      // Determine active path edges
+      const pathEdges = new Set();
+      for (let i = 0; i < hamCurrentId.length - 1; i++) {
+        const u = hamCurrentId[i];
+        const v = hamCurrentId[i + 1];
+        pathEdges.add(`${u}-${v}`);
+        pathEdges.add(`${v}-${u}`);
+      }
+
+      hamEdgeList.forEach(([u, v]) => {
+        const p1 = hamVertices[u];
+        const p2 = hamVertices[v];
+        const isPathEdge = pathEdges.has(`${u}-${v}`);
+        const isCandidateEdge = !isPathEdge && (
+          (u === lastVertex && validNext.includes(v)) ||
+          (v === lastVertex && validNext.includes(u))
+        );
+
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', p1.x);
+        line.setAttribute('y1', p1.y);
+        line.setAttribute('x2', p2.x);
+        line.setAttribute('y2', p2.y);
+
+        if (isPathEdge) {
+          line.setAttribute('stroke', isSolution ? '#f59e0b' : (isDeadEnd ? '#f43f5e' : '#6366f1'));
+          line.setAttribute('stroke-width', '5');
+        } else if (isCandidateEdge) {
+          line.setAttribute('stroke', '#10b981');
+          line.setAttribute('stroke-width', '3.5');
+          line.setAttribute('class', 'animated-edge');
+        } else {
+          line.setAttribute('stroke', isDark ? '#334155' : '#cbd5e1');
+          line.setAttribute('stroke-width', '2.5');
+        }
+        edgesGroup.appendChild(line);
+      });
+
+      // Show dashed red "Missing edge to a!" indicator when in a dead end at 'e' or 'c'
+      if (isDeadEnd) {
+        missingGroup.classList.remove('hidden');
+        const missingLine = document.getElementById('hamMissingLine');
+        const badgeBg = document.getElementById('hamMissingBadgeBg');
+        const badgeText = document.getElementById('hamMissingBadgeText');
+        const pStart = hamVertices[lastVertex];
+        const pEnd = hamVertices['a'];
+        missingLine.setAttribute('x1', pStart.x);
+        missingLine.setAttribute('y1', pStart.y);
+        missingLine.setAttribute('x2', pEnd.x);
+        missingLine.setAttribute('y2', pEnd.y);
+
+        const midX = (pStart.x + pEnd.x) / 2;
+        const midY = (pStart.y + pEnd.y) / 2 - (lastVertex === 'c' ? 28 : 0);
+        badgeBg.setAttribute('x', midX - 42);
+        badgeBg.setAttribute('y', midY - 12);
+        badgeBg.setAttribute('width', '84');
+        badgeText.setAttribute('x', midX);
+        badgeText.setAttribute('y', midY + 3);
+      } else {
+        missingGroup.classList.add('hidden');
+      }
+
+      // Render Graph Vertices
+      Object.entries(hamVertices).forEach(([vKey, vPos]) => {
+        const isCurrent = vKey === lastVertex;
+        const isVisited = hamCurrentId.includes(vKey);
+        const isValidOption = validNext.includes(vKey);
+        const stepOrder = hamCurrentId.indexOf(vKey) + 1;
+
+        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        g.setAttribute('class', 'svg-node');
+        g.onclick = () => hamClickGraphVertex(vKey);
+
+        // Outer pulse ring for valid next moves
+        if (isValidOption) {
+          const pulseRing = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          pulseRing.setAttribute('cx', vPos.x);
+          pulseRing.setAttribute('cy', vPos.y);
+          pulseRing.setAttribute('r', '26');
+          pulseRing.setAttribute('fill', 'none');
+          pulseRing.setAttribute('stroke', '#10b981');
+          pulseRing.setAttribute('stroke-width', '3');
+          pulseRing.setAttribute('stroke-dasharray', '4 3');
+          g.appendChild(pulseRing);
+        }
+
+        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circle.setAttribute('cx', vPos.x);
+        circle.setAttribute('cy', vPos.y);
+        circle.setAttribute('r', isCurrent ? '21' : '18');
+
+        if (isSolution) {
+          circle.setAttribute('fill', '#f59e0b');
+          circle.setAttribute('stroke', '#fef3c7');
+          circle.setAttribute('stroke-width', '3');
+          circle.setAttribute('filter', 'url(#glowGold)');
+        } else if (isCurrent && isDeadEnd) {
+          circle.setAttribute('fill', '#f43f5e');
+          circle.setAttribute('stroke', '#ffe4e6');
+          circle.setAttribute('stroke-width', '3');
+          circle.setAttribute('filter', 'url(#glowRed)');
+        } else if (isCurrent) {
+          circle.setAttribute('fill', '#4f46e5');
+          circle.setAttribute('stroke', '#e0e7ff');
+          circle.setAttribute('stroke-width', '3');
+        } else if (isValidOption) {
+          circle.setAttribute('fill', '#10b981');
+          circle.setAttribute('stroke', '#d1fae5');
+          circle.setAttribute('stroke-width', '2.5');
+          circle.setAttribute('filter', 'url(#glowGreen)');
+        } else if (isVisited) {
+          circle.setAttribute('fill', '#6366f1');
+          circle.setAttribute('stroke', isDark ? '#1e1b4b' : '#e0e7ff');
+          circle.setAttribute('stroke-width', '2');
+        } else {
+          circle.setAttribute('fill', isDark ? '#1e293b' : '#f1f5f9');
+          circle.setAttribute('stroke', isDark ? '#475569' : '#94a3b8');
+          circle.setAttribute('stroke-width', '2');
+        }
+        g.appendChild(circle);
+
+        // Vertex Letter inside circle
+        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        text.setAttribute('x', vPos.x);
+        text.setAttribute('y', vPos.y + 5);
+        text.setAttribute('text-anchor', 'middle');
+        text.setAttribute('font-size', '15');
+        text.setAttribute('font-weight', 'bold');
+        text.setAttribute('font-family', 'JetBrains Mono, monospace');
+        text.setAttribute('fill', (isVisited || isValidOption || isSolution) ? '#ffffff' : (isDark ? '#e2e8f0' : '#1e293b'));
+        text.textContent = vPos.label;
+        g.appendChild(text);
+
+        // Order Badge (1..5) if visited
+        if (isVisited) {
+          const badge = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          badge.setAttribute('cx', vPos.x + 15);
+          badge.setAttribute('cy', vPos.y - 15);
+          badge.setAttribute('r', '9');
+          badge.setAttribute('fill', isDark ? '#0f172a' : '#ffffff');
+          badge.setAttribute('stroke', '#6366f1');
+          badge.setAttribute('stroke-width', '1.5');
+          g.appendChild(badge);
+
+          const badgeTxt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          badgeTxt.setAttribute('x', vPos.x + 15);
+          badgeTxt.setAttribute('y', vPos.y - 11.5);
+          badgeTxt.setAttribute('text-anchor', 'middle');
+          badgeTxt.setAttribute('font-size', '10');
+          badgeTxt.setAttribute('font-weight', 'bold');
+          badgeTxt.setAttribute('fill', isDark ? '#a5b4fc' : '#4f46e5');
+          badgeTxt.textContent = isSolution && vKey === 'a' ? '1,6' : stepOrder;
+          g.appendChild(badgeTxt);
+        }
+
+        nodesGroup.appendChild(g);
+      });
+
+      // 3. Render Decision Tree 5.28b
+      const treeEdgesGroup = document.getElementById('hamTreeEdges');
+      const treeNodesGroup = document.getElementById('hamTreeNodes');
+      treeEdgesGroup.innerHTML = '';
+      treeNodesGroup.innerHTML = '';
+
+      // Draw tree edges
+      hamTreeData.forEach(node => {
+        if (!node.parent) return;
+        const parentNode = hamTreeData.find(n => n.id === node.parent);
+        const isActiveBranch = hamCurrentId.startsWith(node.id);
+        const isVisitedBranch = hamVisitedTreeIds.has(node.id);
+
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', parentNode.x);
+        line.setAttribute('y1', parentNode.y + 12);
+        line.setAttribute('x2', node.x);
+        line.setAttribute('y2', node.y - 13);
+
+        if (isActiveBranch) {
+          line.setAttribute('stroke', isSolution ? '#f59e0b' : (isDeadEnd ? '#f43f5e' : '#6366f1'));
+          line.setAttribute('stroke-width', '3');
+        } else if (isVisitedBranch) {
+          line.setAttribute('stroke', isDark ? '#475569' : '#94a3b8');
+          line.setAttribute('stroke-width', '2');
+        } else {
+          line.setAttribute('stroke', isDark ? '#1e293b' : '#e2e8f0');
+          line.setAttribute('stroke-width', '1.5');
+        }
+        treeEdgesGroup.appendChild(line);
+      });
+
+      // Draw tree nodes
+      hamTreeData.forEach(node => {
+        const isCurrent = node.id === hamCurrentId;
+        const isOnActivePath = hamCurrentId.startsWith(node.id);
+        const isVisited = hamVisitedTreeIds.has(node.id);
+        const isNextChild = node.parent === hamCurrentId;
+
+        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        g.setAttribute('class', 'tree-node-group');
+        g.onclick = () => hamJumpToNode(node.id);
+
+        const boxWidth = Math.max(32, node.id.length * 9 + 14);
+        const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        rect.setAttribute('x', node.x - boxWidth / 2);
+        rect.setAttribute('y', node.y - 12);
+        rect.setAttribute('width', boxWidth);
+        rect.setAttribute('height', '24');
+        // Solutions in Fig 5.28b have rectangular sharp/slightly rounded boxes; others are pills
+        rect.setAttribute('rx', node.type === 'solution' ? '3' : '8');
+
+        if (isCurrent) {
+          if (node.type === 'deadend') {
+            rect.setAttribute('fill', '#f43f5e');
+            rect.setAttribute('stroke', '#ffe4e6');
+          } else if (node.type === 'solution') {
+            rect.setAttribute('fill', '#f59e0b');
+            rect.setAttribute('stroke', '#fef3c7');
+          } else {
+            rect.setAttribute('fill', '#4f46e5');
+            rect.setAttribute('stroke', '#c7d2fe');
+          }
+          rect.setAttribute('stroke-width', '2.5');
+        } else if (isOnActivePath) {
+          rect.setAttribute('fill', isDark ? '#312e81' : '#e0e7ff');
+          rect.setAttribute('stroke', '#6366f1');
+          rect.setAttribute('stroke-width', '2');
+        } else if (isNextChild) {
+          rect.setAttribute('fill', isDark ? '#064e3b' : '#d1fae5');
+          rect.setAttribute('stroke', '#10b981');
+          rect.setAttribute('stroke-width', '2');
+        } else if (node.type === 'solution') {
+          rect.setAttribute('fill', isVisited ? (isDark ? '#451a03' : '#fef3c7') : (isDark ? '#0f172a' : '#fffbeb'));
+          rect.setAttribute('stroke', '#f59e0b');
+          rect.setAttribute('stroke-width', '2');
+        } else if (node.type === 'deadend' && isVisited) {
+          rect.setAttribute('fill', isDark ? '#4c0519' : '#ffe4e6');
+          rect.setAttribute('stroke', '#f43f5e');
+          rect.setAttribute('stroke-width', '1.5');
+        } else {
+          rect.setAttribute('fill', isDark ? '#0f172a' : '#f8fafc');
+          rect.setAttribute('stroke', isVisited ? (isDark ? '#475569' : '#94a3b8') : (isDark ? '#1e293b' : '#e2e8f0'));
+          rect.setAttribute('stroke-width', '1.2');
+        }
+        g.appendChild(rect);
+
+        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        text.setAttribute('x', node.x);
+        text.setAttribute('y', node.y + 4);
+        text.setAttribute('text-anchor', 'middle');
+        text.setAttribute('font-family', 'JetBrains Mono, monospace');
+        text.setAttribute('font-size', '11.5');
+        text.setAttribute('font-weight', (isCurrent || node.type === 'solution' || isOnActivePath) ? '700' : '500');
+
+        if (isCurrent) {
+          text.setAttribute('fill', node.type === 'solution' ? '#0f172a' : '#ffffff');
+        } else if (isOnActivePath) {
+          text.setAttribute('fill', isDark ? '#e0e7ff' : '#312e81');
+        } else if (isNextChild) {
+          text.setAttribute('fill', isDark ? '#6ee7b7' : '#065f46');
+        } else if (node.type === 'solution') {
+          text.setAttribute('fill', isDark ? '#fbbf24' : '#b45309');
+        } else if (node.type === 'deadend' && isVisited) {
+          text.setAttribute('fill', isDark ? '#fda4af' : '#be123c');
+        } else {
+          text.setAttribute('fill', isVisited ? (isDark ? '#cbd5e1' : '#334155') : (isDark ? '#64748b' : '#94a3b8'));
+        }
+        text.textContent = node.id;
+        g.appendChild(text);
+
+        // Small status icon below leaves
+        if (node.type === 'deadend') {
+          const mark = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          mark.setAttribute('x', node.x);
+          mark.setAttribute('y', node.y + 24);
+          mark.setAttribute('text-anchor', 'middle');
+          mark.setAttribute('font-size', '10');
+          mark.setAttribute('fill', '#f43f5e');
+          mark.textContent = '✕ тупик';
+          g.appendChild(mark);
+        } else if (node.type === 'solution') {
+          const mark = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          mark.setAttribute('x', node.x);
+          mark.setAttribute('y', node.y + 25);
+          mark.setAttribute('text-anchor', 'middle');
+          mark.setAttribute('font-size', '10');
+          mark.setAttribute('font-weight', 'bold');
+          mark.setAttribute('fill', isDark ? '#fbbf24' : '#d97706');
+          mark.textContent = '✓ цикл';
+          g.appendChild(mark);
+        }
+
+        treeNodesGroup.appendChild(g);
+      });
+    }
+
+    /* =========================================================================
+       TAB 2: GRAPH COLORING WITH 6 COLORS & NEIGHBOR CONFLICT DEMO (P. 214)
+       ========================================================================= */
+    const colorPalette = {
+      0: { name: 'Не розфарбовано', short: 'Немає', hex: '#64748b', textHex: '#ffffff', badgeBg: 'bg-slate-500 text-white' },
+      1: { name: 'Колір 1 (Синій)',      short: '1: Синій',      hex: '#3b82f6', textHex: '#ffffff', badgeBg: 'bg-blue-500 text-white' },
+      2: { name: 'Колір 2 (Жовтий)',     short: '2: Жовтий',     hex: '#eab308', textHex: '#0f172a', badgeBg: 'bg-yellow-400 text-slate-950' },
+      3: { name: 'Колір 3 (Червоний)',   short: '3: Червоний',   hex: '#ef4444', textHex: '#ffffff', badgeBg: 'bg-red-500 text-white' },
+      4: { name: 'Колір 4 (Зелений)',    short: '4: Зелений',    hex: '#10b981', textHex: '#ffffff', badgeBg: 'bg-emerald-500 text-white' },
+      5: { name: 'Колір 5 (Фіолетовий)', short: '5: Фіолет.',    hex: '#8b5cf6', textHex: '#ffffff', badgeBg: 'bg-violet-500 text-white' },
+      6: { name: 'Колір 6 (Помаранч.)',  short: '6: Помаранч.',  hex: '#f97316', textHex: '#ffffff', badgeBg: 'bg-orange-500 text-white' }
+    };
+
+    const colVerticesPos = {
+      a: { x: 70,  y: 170, label: 'a' },
+      b: { x: 215, y: 45,  label: 'b' },
+      c: { x: 365, y: 110, label: 'c' },
+      d: { x: 365, y: 240, label: 'd' },
+      e: { x: 215, y: 295, label: 'e' }
+    };
+
+    const colScenarios = {
+      backtrack: {
+        edges: [
+          ['a', 'b'], ['a', 'c'], ['b', 'c'],
+          ['c', 'd'], ['b', 'e'], ['c', 'e'], ['d', 'e']
+        ],
+        steps: [
+          {
+            colors: { a: 1, b: 0, c: 0, d: 0, e: 0 },
+            activeVertex: 'a',
+            title: 'Крок 1: Фарбуємо вершину a у Колір 1 (Синій)',
+            desc: 'Починаємо з вершини a. Беремо перший колір зі списку — Колір 1 (Синій).'
+          },
+          {
+            colors: { a: 1, b: 1, c: 0, d: 0, e: 0 },
+            activeVertex: 'b',
+            isConflictDemo: true,
+            title: 'Крок 2 (Перевірка Кольору 1 для b): ❌ ЗАБОРОНЕНО! Сусід a вже має Колір 1!',
+            desc: 'Спробуємо дати вершині b Колір 1 (Синій). Оскільки між a та b є ребро, виникає КОНФЛІКТ СУСІДІВ! Алгоритм відхиляє Колір 1 і бере наступний зі списку — Колір 2.'
+          },
+          {
+            colors: { a: 1, b: 2, c: 0, d: 0, e: 0 },
+            activeVertex: 'b',
+            title: 'Крок 3: Вершина b отримує дозволений Колір 2 (Жовтий)',
+            desc: 'Колір 2 (Жовтий) не конфліктує із сусідом a (Синій). Рухаємося далі до вершини c.'
+          },
+          {
+            colors: { a: 1, b: 2, c: 3, d: 0, e: 0 },
+            activeVertex: 'c',
+            title: 'Крок 4: Вершина c отримує Колір 3 (Червоний)',
+            desc: 'Цитата зі стор. 214: «Використаємо для вершини c колір 1, якщо можливо, якщо ні — колір 2. Тільки якщо жоден із кольорів 1 і 2 не можна використовувати, розфарбуємо c у колір 3».'
+          },
+          {
+            colors: { a: 1, b: 2, c: 3, d: 1, e: 0 },
+            activeVertex: 'd',
+            title: 'Крок 5: Вершина d бере перший вільний — Колір 1 (Синій)',
+            desc: 'Вершина d з’єднана лише з c (Колір 3) та e. Перший колір зі списку — Колір 1 (Синій) — вільний! Призначаємо d = Колір 1.'
+          },
+          {
+            colors: { a: 1, b: 2, c: 3, d: 1, e: 0 },
+            activeVertex: 'e',
+            isDeadEnd: true,
+            title: 'Крок 6: ГЛУХИЙ КУТ на вершині e (при n=3)! Усі кольори 1, 2, 3 зайняті сусідами!',
+            desc: 'Дивіться на сусідів e: сусід d має Колір 1 (Синій), сусід b — Колір 2 (Жовтий), сусід c — Колір 3 (Червоний). Якщо у нас ліміт n=3 кольори, жоден не підходить! Потрібен Backtrack (або збільшення ліміту до Кольору 4 Зеленого).'
+          },
+          {
+            colors: { a: 1, b: 2, c: 3, d: 2, e: 0 },
+            activeVertex: 'd',
+            isBacktrack: true,
+            title: 'Крок 7: ⬅ BACKTRACK до вершини d! Змінюємо її колір з 1 на 2 (Жовтий)',
+            desc: 'Повертаємося до останньої розфарбованої вершини d, скасовуємо Колір 1 і беремо наступний дозволений зі списку — Колір 2 (Жовтий)!'
+          },
+          {
+            colors: { a: 1, b: 2, c: 3, d: 2, e: 1 },
+            activeVertex: 'e',
+            isSolution: true,
+            title: 'Крок 8: 🏆 Розв’язок знайдено! Вершина e тепер вільно бере Колір 1 (Синій)!',
+            desc: 'Тепер сусіди вершини e мають лише Колір 2 (b та d) і Колір 3 (c). Колір 1 (Синій) звільнився! Увесь граф розфарбовано без жодних однакових сусідів.'
+          }
+        ]
+      },
+      simple: {
+        edges: [
+          ['a', 'b'], ['a', 'd'], ['b', 'c'], ['c', 'd'], ['b', 'e'], ['e', 'd'], ['c', 'e']
+        ],
+        steps: [
+          {
+            colors: { a: 1, b: 0, c: 0, d: 0, e: 0 },
+            activeVertex: 'a',
+            title: 'Крок 1: Вершина a = Колір 1 (Синій)',
+            desc: 'Починаємо розфарбування графа з Рис. 5.28а з першого кольору у списку.'
+          },
+          {
+            colors: { a: 1, b: 2, c: 0, d: 0, e: 0 },
+            activeVertex: 'b',
+            title: 'Крок 2: Вершина b = Колір 2 (Жовтий)',
+            desc: 'Сусід a вже має Колір 1, тому b отримує наступний — Колір 2.'
+          },
+          {
+            colors: { a: 1, b: 2, c: 1, d: 0, e: 0 },
+            activeVertex: 'c',
+            title: 'Крок 3: Вершина c = Колір 1 (Синій)',
+            desc: 'Вершина c з’єднана з b (Колір 2), але НЕ з’єднана з a. Тому перший колір зі списку (Колір 1) їй підходить!'
+          },
+          {
+            colors: { a: 1, b: 2, c: 1, d: 2, e: 0 },
+            activeVertex: 'd',
+            title: 'Крок 4: Вершина d = Колір 2 (Жовтий)',
+            desc: 'Сусіди a та c мають Колір 1, тому d отримує Колір 2.'
+          },
+          {
+            colors: { a: 1, b: 2, c: 1, d: 2, e: 3 },
+            activeVertex: 'e',
+            isSolution: true,
+            title: 'Крок 5: 🏆 Вершина e = Колір 3 (Червоний)',
+            desc: 'Сусід c має Колір 1, а сусіди b і d — Колір 2. Тому центральна вершина e отримує Колір 3 (Червоний). Розфарбування завершено!'
+          }
+        ]
+      }
+    };
+
+    let colCurrentScenarioKey = 'backtrack';
+    let colMaxColors = 6; // Shows all 6 colors by default so user can freely explore, or restrict to 2..6
+    let colStepIdx = 0;
+    let colColorsState = { a: 1, b: 2, c: 0, d: 0, e: 0 };
+    let colSelectedVertex = 'c';
+    let colConflictEdges = [];
+
+    function getColNeighbors(vKey) {
+      const edges = colScenarios[colCurrentScenarioKey].edges;
+      const res = [];
+      edges.forEach(([u, v]) => {
+        if (u === vKey) res.push(v);
+        if (v === vKey) res.push(u);
+      });
+      return res;
+    }
+
+    function computeColConflicts() {
+      const edges = colScenarios[colCurrentScenarioKey].edges;
+      const conflicts = [];
+      edges.forEach(([u, v]) => {
+        if (colColorsState[u] > 0 && colColorsState[u] === colColorsState[v]) {
+          conflicts.push([u, v]);
+        }
+      });
+      colConflictEdges = conflicts;
+      return conflicts;
+    }
+
+    function colSetMaxColors(n) {
+      colMaxColors = n;
+      playTone('step');
+      // If n=3 and we are on backtrack scenario, explain how n affects available colors
+      renderColoring({
+        activeVertex: colSelectedVertex,
+        title: `Встановлено ліміт палітри: n = ${n} кольорів (список 1..${n})`,
+        desc: n === 2
+          ? 'Увага: при n = 2 розфарбувати трикутник (a-b-c) неможливо — алгоритм гарантовано зайде в тупик!'
+          : (n === 3
+              ? 'Класичний режим зі стор. 214 підручника (3 кольори: Синій, Жовтий, Червоний). Натисніть «⚡ Тупик + Backtrack», щоб побачити повернення!'
+              : `Доступні кольори з 1 по ${n}. Клікніть на будь-яку вершину або колір, щоб протестувати дозволені й заборонені ходи.`)
+      });
+    }
+
+    function colChangeScenario(key) {
+      colCurrentScenarioKey = key;
+      colReset();
+    }
+
+    function colTriggerForbiddenDemo() {
+      // Set up a crystal-clear state where adjacent vertices have the SAME color
+      colColorsState = { a: 1, b: 2, c: 2, d: 1, e: 0 };
+      colSelectedVertex = 'c';
+      computeColConflicts();
+      playTone('deadend');
+      renderColoring({
+        activeVertex: 'c',
+        isConflictDemo: true,
+        title: '🚫 ЗАБОРОНЕНИЙ ХІД: Сусідні вершини b та c мають однаковий Колір 2 (Жовтий)!',
+        desc: 'Вершини b і c з’єднані ребром, тому їм НЕ МОЖНА давати однаковий колір! На графі ребро b—c пульсує червоним. Натисніть зелену кнопку «🔧 Виправити» праворуч або оберіть інший колір у палітрі.'
+      });
+    }
+
+    function colLoadDeadEndDemo() {
+      colCurrentScenarioKey = 'backtrack';
+      document.getElementById('colScenarioSelect').value = 'backtrack';
+      colMaxColors = 3; // Set to 3 colors as in textbook so vertex 'e' hits genuine dead end
+      colStepIdx = 5;   // Step where 'e' has all 3 colors blocked by neighbors b(2), c(3), d(1)
+      colApplyStep(colStepIdx);
+      playTone('deadend');
+    }
+
+    function colAutoFixConflict() {
+      // Find first conflicting vertex or selected vertex and assign the next valid color from 1..colMaxColors
+      computeColConflicts();
+      let targetV = colSelectedVertex;
+      if (colConflictEdges.length > 0) {
+        const [u, v] = colConflictEdges[0];
+        targetV = (colSelectedVertex === u || colSelectedVertex === v) ? colSelectedVertex : v;
+      }
+      colSelectedVertex = targetV;
+      const neighbors = getColNeighbors(targetV);
+      const usedByNeighbors = new Set(neighbors.map(nb => colColorsState[nb]).filter(c => c > 0));
+      const currentC = colColorsState[targetV] || 0;
+
+      // Try to find next valid color starting from currentC + 1, then 1..colMaxColors
+      let chosenColor = 0;
+      for (let c = currentC + 1; c <= colMaxColors; c++) {
+        if (!usedByNeighbors.has(c)) {
+          chosenColor = c;
+          break;
+        }
+      }
+      if (chosenColor === 0) {
+        for (let c = 1; c <= colMaxColors; c++) {
+          if (!usedByNeighbors.has(c)) {
+            chosenColor = c;
+            break;
+          }
+        }
+      }
+
+      if (chosenColor > 0) {
+        colColorsState[targetV] = chosenColor;
+        computeColConflicts();
+        playTone('win');
+        renderColoring({
+          activeVertex: targetV,
+          title: `✅ Виправлено! Вершина ${targetV} отримала дозволений ${colorPalette[chosenColor].name}`,
+          desc: `Жоден із сусідів вершини ${targetV} (${neighbors.join(', ')}) не має цього кольору. Конфлікт усунено!`
+        });
+      } else {
+        // No color available in 1..colMaxColors -> Backtrack needed!
+        playTone('backtrack');
+        if (targetV === 'e' && colColorsState['d'] === 1 && colMaxColors >= 3) {
+          colColorsState['d'] = 2;
+          colColorsState['e'] = 1;
+          colSelectedVertex = 'e';
+          computeColConflicts();
+          renderColoring({
+            activeVertex: 'e',
+            isBacktrack: true,
+            title: '↺ Виконано BACKTRACK: змінили сусіда d (Колір 1 → 2) і дали вершині e Колір 1!',
+            desc: 'Оскільки при ліміті n=' + colMaxColors + ' для вершини e не було жодного вільного кольору, ми повернулися до попередньої вершини d, змінили її колір і розблокували Колір 1 для e!'
+          });
+        } else {
+          renderColoring({
+            activeVertex: targetV,
+            isDeadEnd: true,
+            title: `Глухий кут для вершини ${targetV} при ліміті n = ${colMaxColors}!`,
+            desc: `Усі кольори 1..${colMaxColors} зайняті сусідами (${neighbors.join(', ')}). Збільшіть ліміт кольорів n або змініть колір сусідньої вершини (Backtrack)!`
+          });
+        }
+      }
+    }
+
+    function colAutoColorAll() {
+      // Greedy coloring with backtracking using 1..colMaxColors
+      const order = ['a', 'b', 'c', 'd', 'e'];
+      const tempColors = { a: 0, b: 0, c: 0, d: 0, e: 0 };
+
+      function solve(idx) {
+        if (idx === order.length) return true;
+        const v = order[idx];
+        const nbs = getColNeighbors(v);
+        for (let c = 1; c <= colMaxColors; c++) {
+          const ok = nbs.every(nb => tempColors[nb] !== c);
+          if (ok) {
+            tempColors[v] = c;
+            if (solve(idx + 1)) return true;
+            tempColors[v] = 0;
+          }
+        }
+        return false;
+      }
+
+      if (solve(0)) {
+        colColorsState = { ...tempColors };
+        computeColConflicts();
+        playTone('win');
+        renderColoring({
+          activeVertex: 'e',
+          isSolution: true,
+          title: `🏆 Граф автоматично розфарбовано (ліміт n = ${colMaxColors})!`,
+          desc: 'Жодні дві сусідні вершини не мають однакового кольору. Спробуйте клікнути будь-яку вершину і вручну створити конфлікт!'
+        });
+      } else {
+        playTone('deadend');
+        renderColoring({
+          activeVertex: 'c',
+          isDeadEnd: true,
+          title: `Неможливо розфарбувати цей граф лише у n = ${colMaxColors} кольори!`,
+          desc: 'У графі є трикутник взаємно сусідніх вершин (a-b-c), якому потрібно щонайменше 3 різні кольори. Оберіть n = 3 або більше!'
+        });
+      }
+    }
+
+    function colApplyStep(idx) {
+      const scenario = colScenarios[colCurrentScenarioKey];
+      const step = scenario.steps[idx];
+      colColorsState = { ...step.colors };
+      colSelectedVertex = step.activeVertex;
+      computeColConflicts();
+      renderColoring(step);
+    }
+
+    function colStepNext() {
+      const scenario = colScenarios[colCurrentScenarioKey];
+      if (colStepIdx < scenario.steps.length - 1) {
+        colStepIdx++;
+      } else {
+        colStepIdx = 0;
+      }
+      const step = scenario.steps[colStepIdx];
+      if (step.isDeadEnd || step.isConflictDemo) playTone('deadend');
+      else if (step.isSolution) playTone('win');
+      else if (step.isBacktrack) playTone('backtrack');
+      else playTone('step');
+      colApplyStep(colStepIdx);
+    }
+
+    function colStepPrev() {
+      if (colStepIdx > 0) {
+        colStepIdx--;
+        playTone('backtrack');
+        colApplyStep(colStepIdx);
+      }
+    }
+
+    function colReset() {
+      colStepIdx = 0;
+      playTone('step');
+      colApplyStep(0);
+    }
+
+    function colSelectVertex(vKey) {
+      colSelectedVertex = vKey;
+      playTone('step');
+      renderColoring();
+    }
+
+    function colManualPaint(colorNum, vertexOverride = null) {
+      if (vertexOverride) {
+        colSelectedVertex = vertexOverride;
+      }
+      colColorsState[colSelectedVertex] = colorNum;
+      const conflicts = computeColConflicts();
+      const neighbors = getColNeighbors(colSelectedVertex);
+      const sameColorNeighbors = neighbors.filter(nb => colorNum > 0 && colColorsState[nb] === colorNum);
+
+      const allColored = Object.values(colColorsState).every(c => c > 0);
+      if (sameColorNeighbors.length > 0) {
+        playTone('deadend');
+        renderColoring({
+          activeVertex: colSelectedVertex,
+          isConflictDemo: true,
+          title: `🚫 КОНФЛІКТ СУСІДІВ! Вершина ${colSelectedVertex} та сусід ${sameColorNeighbors.join(', ')} мають однаковий ${colorPalette[colorNum].name}!`,
+          desc: `За правилом розфарбування графів сусідні вершини НЕ МОЖУТЬ мати однаковий колір. Алгоритм бектрекінгу відхиляє ${colorPalette[colorNum].name} і пробує наступний колір зі списку!`
+        });
+      } else if (conflicts.length > 0) {
+        playTone('deadend');
+        renderColoring({
+          activeVertex: colSelectedVertex,
+          isConflictDemo: true,
+          title: `⚠️ Залишається конфлікт кольорів на ребрі (${conflicts[0][0]} — ${conflicts[0][1]})!`,
+          desc: `Сусідні вершини ${conflicts[0][0]} та ${conflicts[0][1]} досі мають однаковий колір. Натисніть «🔧 Виправити» або змініть їхній колір.`
+        });
+      } else if (allColored) {
+        playTone('win');
+        renderColoring({
+          activeVertex: colSelectedVertex,
+          isSolution: true,
+          title: '🏆 Чудово! Усі 5 вершин розфарбовано без жодного конфлікту сусідів!',
+          desc: 'Кожна пара з’єднаних ребром вершин має різні кольори.'
+        });
+      } else {
+        playTone('step');
+        renderColoring({
+          activeVertex: colSelectedVertex,
+          title: colorNum > 0
+            ? `✅ Дозволений хід: вершині ${colSelectedVertex} призначено ${colorPalette[colorNum].name}`
+            : `Колір вершини ${colSelectedVertex} очищено`,
+          desc: colorNum > 0
+            ? `Жоден із сусідів вершини ${colSelectedVertex} (${neighbors.join(', ')}) не має цього кольору. Оберіть наступну вершину!`
+            : 'Оберіть новий колір із палітри.'
+        });
+      }
+    }
+
+    function renderColoring(stepOverride = null) {
+      const isDark = document.documentElement.classList.contains('dark');
+      const scenario = colScenarios[colCurrentScenarioKey];
+      const step = stepOverride || scenario.steps[colStepIdx] || {
+        title: `Вершина ${colSelectedVertex}`,
+        desc: 'Оберіть колір у палітрі.'
+      };
+
+      computeColConflicts();
+      const hasAnyConflict = colConflictEdges.length > 0;
+
+      // Update limit buttons styling (n = 2..6)
+      for (let n = 2; n <= 6; n++) {
+        const btn = document.getElementById(`colLimitBtn-${n}`);
+        if (!btn) continue;
+        if (n === colMaxColors) {
+          btn.className = "px-2.5 py-1 rounded-lg text-xs font-bold transition border bg-indigo-600 text-white border-indigo-500 shadow-sm";
+        } else {
+          btn.className = "px-2.5 py-1 rounded-lg text-xs font-semibold transition border bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:bg-slate-100";
+        }
+      }
+
+      document.getElementById('colSelectedVertexBadge').textContent = `Обрано вершину: ${colSelectedVertex}`;
+      document.getElementById('colPaletteVertexName').textContent = colSelectedVertex;
+      document.getElementById('colActiveLimitBadge').textContent = `Активні кольори: 1..${colMaxColors}`;
+
+      // Check if current selected vertex is in a dead end (all 1..colMaxColors used by neighbors)
+      const selNeighbors = getColNeighbors(colSelectedVertex);
+      const selNeighborColors = new Set(selNeighbors.map(nb => colColorsState[nb]).filter(c => c > 0));
+      let freeColorsForSelected = 0;
+      for (let c = 1; c <= colMaxColors; c++) {
+        if (!selNeighborColors.has(c)) freeColorsForSelected++;
+      }
+      const isSelectedDeadEnd = freeColorsForSelected === 0;
+
+      // Show or hide the Auto-Fix / Backtrack action button
+      const fixWrap = document.getElementById('colFixActionWrap');
+      if (hasAnyConflict || step.isDeadEnd || isSelectedDeadEnd) {
+        fixWrap.classList.remove('hidden');
+      } else {
+        fixWrap.classList.add('hidden');
+      }
+
+      // Render 6-Color Palette Buttons with explicit neighbor conflict badges
+      const paletteGrid = document.getElementById('colPaletteButtonsGrid');
+      paletteGrid.innerHTML = '';
+
+      for (let cNum = 1; cNum <= 6; cNum++) {
+        const pal = colorPalette[cNum];
+        const isWithinLimit = cNum <= colMaxColors;
+        const isCurrentColor = colColorsState[colSelectedVertex] === cNum;
+        const conflictingNeighbors = selNeighbors.filter(nb => colColorsState[nb] === cNum);
+        const causesConflict = conflictingNeighbors.length > 0;
+
+        const btn = document.createElement('button');
+        btn.onclick = () => {
+          if (!isWithinLimit) {
+            colMaxColors = cNum; // Automatically expand limit if user clicks a higher color
+          }
+          colManualPaint(cNum);
+        };
+
+        let statusTag = '';
+        if (causesConflict) {
+          statusTag = `<span class="px-1.5 py-0.5 rounded bg-rose-600 text-white text-[10px] font-extrabold uppercase tracking-tight">⚠️ Сусід ${conflictingNeighbors.join(',')}!</span>`;
+        } else if (!isWithinLimit) {
+          statusTag = `<span class="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px]">Поза n=${colMaxColors}</span>`;
+        } else {
+          statusTag = `<span class="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold">✓ Дозволено</span>`;
+        }
+
+        btn.className = `p-1.5 rounded-lg border text-left transition-all flex flex-col gap-0.5 ${
+          isCurrentColor
+            ? (causesConflict ? 'ring-2 ring-rose-500 border-rose-500 bg-rose-500/15' : 'ring-2 ring-indigo-500 border-indigo-500 bg-indigo-500/10')
+            : (causesConflict
+                ? 'border-rose-400/60 dark:border-rose-500/50 bg-rose-500/5 hover:bg-rose-500/15'
+                : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-indigo-400')
+        } ${!isWithinLimit ? 'opacity-60 hover:opacity-100' : ''}`;
+
+        btn.innerHTML = `
+          <div class="flex items-center justify-between gap-1 w-full">
+            <span class="flex items-center gap-1.5">
+              <span class="w-3.5 h-3.5 rounded-full shrink-0 shadow-sm border border-black/10" style="background-color: ${pal.hex}"></span>
+              <span class="text-[11px] font-bold text-slate-800 dark:text-slate-100">${pal.short}</span>
+            </span>
+            ${isCurrentColor ? '<span class="text-[10px] font-extrabold">●</span>' : ''}
+          </div>
+          <div class="flex items-center w-full">
+            ${statusTag}
+          </div>
+        `;
+        paletteGrid.appendChild(btn);
+      }
+
+      // Add Clear button and Quick Conflict Trigger button in the remaining 2 slots of the 8-slot grid
+      const clearBtn = document.createElement('button');
+      clearBtn.onclick = () => colManualPaint(0);
+      clearBtn.className = "p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 transition flex flex-col gap-0.5 text-left";
+      clearBtn.innerHTML = `
+        <div class="flex items-center gap-1">
+          <span class="w-3.5 h-3.5 rounded-full bg-slate-400 text-white text-[9px] flex items-center justify-center font-bold">✕</span>
+          <span class="text-[11px] font-bold">Очистити</span>
+        </div>
+        <span class="text-[10px] text-slate-500">Зняти колір з ${colSelectedVertex}</span>
+      `;
+      paletteGrid.appendChild(clearBtn);
+
+      const testConflictBtn = document.createElement('button');
+      testConflictBtn.onclick = () => {
+        // Intentionally pick the color of the first colored neighbor of colSelectedVertex
+        const coloredNb = selNeighbors.find(nb => colColorsState[nb] > 0);
+        if (coloredNb) {
+          colManualPaint(colColorsState[coloredNb]);
+        } else {
+          colTriggerForbiddenDemo();
+        }
+      };
+      testConflictBtn.className = "p-1.5 rounded-lg border border-rose-500/50 bg-rose-500/10 hover:bg-rose-500/20 transition flex flex-col gap-0.5 text-left";
+      testConflictBtn.innerHTML = `
+        <div class="flex items-center gap-1">
+          <span class="text-[11px]">⚡</span>
+          <span class="text-[11px] font-extrabold text-rose-700 dark:text-rose-300">Створити конфлікт</span>
+        </div>
+        <span class="text-[10px] text-rose-600 dark:text-rose-400 font-semibold">Однаковий колір</span>
+      `;
+      paletteGrid.appendChild(testConflictBtn);
+
+      // Update Status Banner
+      const statusBox = document.getElementById('colStatusBox');
+      const statusIcon = document.getElementById('colStatusIcon');
+      const stepCounter = document.getElementById('colStepCounter');
+      const statusTitle = document.getElementById('colStatusTitle');
+      const statusDesc = document.getElementById('colStatusDesc');
+
+      stepCounter.textContent = hasAnyConflict ? '🚨 ПОРУШЕННЯ ПРАВИЛА' : `Крок ${colStepIdx + 1} з ${scenario.steps.length}`;
+      statusTitle.textContent = step.title;
+      statusDesc.textContent = step.desc;
+
+      if (hasAnyConflict || step.isDeadEnd || step.isConflictDemo) {
+        statusBox.className = "rounded-2xl p-3 border-2 transition-all duration-300 bg-rose-500/15 border-rose-500 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 animate-shake";
+        statusIcon.className = "w-9 h-9 rounded-xl bg-rose-600 text-white font-bold flex items-center justify-center text-lg shrink-0 shadow";
+        statusIcon.textContent = "🚫";
+      } else if (step.isBacktrack) {
+        statusBox.className = "rounded-2xl p-3 border-2 transition-all duration-300 bg-amber-500/15 border-amber-500/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5";
+        statusIcon.className = "w-9 h-9 rounded-xl bg-amber-500 text-slate-950 font-bold flex items-center justify-center text-lg shrink-0 shadow";
+        statusIcon.textContent = "↺";
+      } else if (step.isSolution) {
+        statusBox.className = "rounded-2xl p-3 border-2 transition-all duration-300 bg-emerald-500/15 border-emerald-500/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5";
+        statusIcon.className = "w-9 h-9 rounded-xl bg-emerald-500 text-white font-bold flex items-center justify-center text-lg shrink-0 shadow";
+        statusIcon.textContent = "🏆";
+      } else {
+        statusBox.className = "rounded-2xl p-3 border-2 transition-all duration-300 bg-indigo-500/10 border-indigo-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5";
+        statusIcon.className = "w-9 h-9 rounded-xl bg-indigo-600 text-white font-bold flex items-center justify-center text-lg shrink-0 shadow";
+        statusIcon.textContent = "🎨";
+      }
+
+      // Draw SVG Graph with explicit conflict badges on edges
+      const edgesGroup = document.getElementById('colGraphEdges');
+      const conflictLabelsGroup = document.getElementById('colGraphConflictLabels');
+      const nodesGroup = document.getElementById('colGraphNodes');
+      edgesGroup.innerHTML = '';
+      conflictLabelsGroup.innerHTML = '';
+      nodesGroup.innerHTML = '';
+
+      const conflictingVerticesSet = new Set();
+      colConflictEdges.forEach(([u, v]) => {
+        conflictingVerticesSet.add(u);
+        conflictingVerticesSet.add(v);
+      });
+
+      scenario.edges.forEach(([u, v]) => {
+        const p1 = colVerticesPos[u];
+        const p2 = colVerticesPos[v];
+        const isConflict = colConflictEdges.some(([cu, cv]) => (cu === u && cv === v) || (cu === v && cv === u));
+
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', p1.x);
+        line.setAttribute('y1', p1.y);
+        line.setAttribute('x2', p2.x);
+        line.setAttribute('y2', p2.y);
+
+        if (isConflict) {
+          line.setAttribute('stroke', '#f43f5e');
+          line.setAttribute('class', 'conflict-edge');
+
+          // Add explicit warning label right on the conflicting edge
+          const midX = (p1.x + p2.x) / 2;
+          const midY = (p1.y + p2.y) / 2;
+
+          const badgeG = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+          const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+          rect.setAttribute('x', midX - 78);
+          rect.setAttribute('y', midY - 13);
+          rect.setAttribute('width', '156');
+          rect.setAttribute('height', '24');
+          rect.setAttribute('rx', '7');
+          rect.setAttribute('fill', '#e11d48');
+          rect.setAttribute('stroke', '#ffe4e6');
+          rect.setAttribute('stroke-width', '2');
+          badgeG.appendChild(rect);
+
+          const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          txt.setAttribute('x', midX);
+          txt.setAttribute('y', midY + 3);
+          txt.setAttribute('text-anchor', 'middle');
+          txt.setAttribute('fill', '#ffffff');
+          txt.setAttribute('font-size', '10.5');
+          txt.setAttribute('font-weight', '800');
+          txt.textContent = `❌ ОДНАКОВИЙ КОЛІР (${u}—${v})!`;
+          badgeG.appendChild(txt);
+
+          conflictLabelsGroup.appendChild(badgeG);
+        } else {
+          line.setAttribute('stroke', isDark ? '#334155' : '#cbd5e1');
+          line.setAttribute('stroke-width', '3');
+        }
+        edgesGroup.appendChild(line);
+      });
+
+      Object.entries(colVerticesPos).forEach(([vKey, vPos]) => {
+        const colorCode = colColorsState[vKey] || 0;
+        const pal = colorPalette[colorCode];
+        const isSelected = vKey === colSelectedVertex;
+        const isVertexInConflict = conflictingVerticesSet.has(vKey);
+
+        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        g.setAttribute('class', 'svg-node');
+        g.onclick = () => colSelectVertex(vKey);
+
+        if (isSelected || isVertexInConflict) {
+          const ring = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          ring.setAttribute('cx', vPos.x);
+          ring.setAttribute('cy', vPos.y);
+          ring.setAttribute('r', isVertexInConflict ? '32' : '29');
+          ring.setAttribute('fill', 'none');
+          ring.setAttribute('stroke', isVertexInConflict ? '#f43f5e' : '#6366f1');
+          ring.setAttribute('stroke-width', isVertexInConflict ? '4' : '3');
+          ring.setAttribute('stroke-dasharray', '5 3');
+          g.appendChild(ring);
+        }
+
+        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circle.setAttribute('cx', vPos.x);
+        circle.setAttribute('cy', vPos.y);
+        circle.setAttribute('r', '23');
+        circle.setAttribute('fill', colorCode === 0 ? (isDark ? '#1e293b' : '#f1f5f9') : pal.hex);
+        circle.setAttribute('stroke', isVertexInConflict ? '#ffe4e6' : (isSelected ? '#ffffff' : (isDark ? '#475569' : '#94a3b8')));
+        circle.setAttribute('stroke-width', (isSelected || isVertexInConflict) ? '3.5' : '2');
+        if (isVertexInConflict) {
+          circle.setAttribute('filter', 'url(#glowRed)');
+        }
+        g.appendChild(circle);
+
+        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        text.setAttribute('x', vPos.x);
+        text.setAttribute('y', vPos.y + 5);
+        text.setAttribute('text-anchor', 'middle');
+        text.setAttribute('font-family', 'JetBrains Mono, monospace');
+        text.setAttribute('font-size', '15');
+        text.setAttribute('font-weight', 'bold');
+        text.setAttribute('fill', colorCode === 0 ? (isDark ? '#e2e8f0' : '#1e293b') : pal.textHex);
+        text.textContent = `${vKey}${colorCode > 0 ? ':' + colorCode : ''}`;
+        g.appendChild(text);
+
+        nodesGroup.appendChild(g);
+      });
+
+      // Render Right Column: Color Availability Matrix for all active colors (1..colMaxColors)
+      const inspectorList = document.getElementById('colInspectorList');
+      inspectorList.innerHTML = '';
+
+      ['a', 'b', 'c', 'd', 'e'].forEach(vKey => {
+        const neighbors = getColNeighbors(vKey);
+        const currentColor = colColorsState[vKey];
+        const isCurrent = vKey === colSelectedVertex;
+        const sameColorNbs = neighbors.filter(nb => currentColor > 0 && colColorsState[nb] === currentColor);
+        const hasActiveConflict = sameColorNbs.length > 0;
+
+        // Check availability for each color 1..colMaxColors
+        const colorChecks = [];
+        for (let cNum = 1; cNum <= colMaxColors; cNum++) {
+          const conflictingNeighbor = neighbors.find(nb => colColorsState[nb] === cNum);
+          colorChecks.push({
+            cNum,
+            valid: !conflictingNeighbor,
+            conflictWith: conflictingNeighbor
+          });
+        }
+
+        const allBlocked = colorChecks.every(ch => !ch.valid);
+
+        const row = document.createElement('div');
+        row.onclick = () => colSelectVertex(vKey);
+        row.className = `p-2 rounded-xl border transition cursor-pointer flex flex-col gap-1.5 ${
+          hasActiveConflict
+            ? 'bg-rose-500/15 border-2 border-rose-500 shadow-sm'
+            : (isCurrent
+                ? (allBlocked ? 'bg-amber-500/15 border-2 border-amber-500' : 'bg-indigo-500/10 border-2 border-indigo-500/60')
+                : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-800 hover:border-slate-300')
+        }`;
+
+        const badgeStyle = colorPalette[currentColor]?.badgeBg || 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300';
+
+        const checksHtml = colorChecks.map(ch => {
+          const isChosen = currentColor === ch.cNum;
+          const cPal = colorPalette[ch.cNum];
+          if (ch.valid) {
+            return `<button onclick="event.stopPropagation(); colManualPaint(${ch.cNum}, '${vKey}')" class="px-1.5 py-0.5 rounded-md text-[10.5px] font-mono font-bold border transition flex items-center gap-1 ${
+              isChosen
+                ? 'bg-emerald-600 text-white border-emerald-400 shadow-sm ring-1 ring-emerald-400/50'
+                : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
+            }" title="Клікніть, щоб пофарбувати вершину ${vKey} у ${cPal.name}">
+              <span class="w-2 h-2 rounded-full inline-block shrink-0" style="background:${cPal.hex}"></span>
+              <span>К${ch.cNum}: ✓ вільно</span>
+            </button>`;
+          } else {
+            return `<button onclick="event.stopPropagation(); colManualPaint(${ch.cNum}, '${vKey}')" class="px-1.5 py-0.5 rounded-md text-[10.5px] font-mono font-bold border transition flex items-center gap-1 ${
+              isChosen
+                ? 'bg-rose-600 text-white border-rose-300 shadow-md ring-1 ring-rose-400 animate-pulse'
+                : 'bg-rose-500/10 hover:bg-rose-500/25 text-rose-600 dark:text-rose-400 border-rose-500/30'
+            }" title="Клікніть, щоб наочно показати ЗАБОРОНЕНИЙ ХІД (конфлікт із сусідом ${ch.conflictWith})">
+              <span class="w-2 h-2 rounded-full inline-block shrink-0" style="background:${cPal.hex}"></span>
+              <span>К${ch.cNum}: ${isChosen ? '🚫 КОНФЛІКТ із ' + ch.conflictWith + '!' : '✕ (сусід ' + ch.conflictWith + ')'}</span>
+            </button>`;
+          }
+        }).join('');
+
+        row.innerHTML = `
+          <div class="flex flex-wrap items-center justify-between gap-1.5">
+            <div class="flex items-center gap-2">
+              <span class="w-6 h-6 rounded-md font-mono font-bold text-xs flex items-center justify-center shadow-sm ${badgeStyle}">
+                ${vKey}
+              </span>
+              <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                <span class="text-xs font-bold">Вершина ${vKey}</span>
+                <span class="text-[11px] text-slate-500 dark:text-slate-400">(сусіди: ${neighbors.join(', ')})</span>
+                <span class="text-[11px]">
+                  ${hasActiveConflict
+                    ? `<b class="text-rose-600 dark:text-rose-400">🚫 ЗАБОРОНЕНО: однаковий колір із сусідом ${sameColorNbs.join(', ')}!</b>`
+                    : (allBlocked
+                        ? `<b class="text-amber-600 dark:text-amber-400">⚡ Глухий кут! Усі кольори 1..${colMaxColors} зайняті (Backtrack)!</b>`
+                        : (currentColor > 0 ? `<span class="text-slate-500 dark:text-slate-400">• Поточний: <b>${colorPalette[currentColor].name}</b></span>` : '<span class="text-slate-400">• Очікує</span>'))}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div class="flex flex-wrap items-center gap-1 pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
+            ${checksHtml}
+          </div>
+        `;
+        inspectorList.appendChild(row);
+      });
+    }
+
+    /*************************************************************************
+     * TAB 3: ЗАДАЧА ПРО 4 ФЕРЗІВ — ОРДЕРЕВО БЕКТРЕКІНГУ З РИС. 5.30 (9 ВУЗЛІВ)
+     *************************************************************************/
+    const TREE_NODES = [
+      {
+        id: 'node_root',
+        tuple: [],
+        label: 'λ',
+        xPercent: 50,
+        yPercent: 10,
+        parent: null,
+        status: 'root',
+        badge: 'Початок',
+        stepIndex: 0
+      },
+      // ЛІВА ГІЛКА (тупикова)
+      {
+        id: 'node_1',
+        tuple: [1],
+        label: '(1)',
+        xPercent: 31,
+        yPercent: 29,
+        parent: 'node_root',
+        status: 'branch',
+        badge: null,
+        stepIndex: 1
+      },
+      {
+        id: 'node_1_3',
+        tuple: [1, 3],
+        label: '(1, 3)',
+        xPercent: 16,
+        yPercent: 51,
+        parent: 'node_1',
+        status: 'deadend',
+        badge: 'Тупик у 3-му',
+        stepIndex: 4
+      },
+      {
+        id: 'node_1_4',
+        tuple: [1, 4],
+        label: '(1, 4)',
+        xPercent: 43,
+        yPercent: 51,
+        parent: 'node_1',
+        status: 'branch',
+        badge: 'Після відкату',
+        stepIndex: 6
+      },
+      {
+        id: 'node_1_4_2',
+        tuple: [1, 4, 2],
+        label: '(1, 4, 2)',
+        xPercent: 43,
+        yPercent: 74,
+        parent: 'node_1_4',
+        status: 'deadend',
+        badge: 'Тупик у 4-му',
+        stepIndex: 8
+      },
+      // ПРАВА ГІЛКА (успішна)
+      {
+        id: 'node_2',
+        tuple: [2],
+        label: '(2)',
+        xPercent: 73,
+        yPercent: 29,
+        parent: 'node_root',
+        status: 'branch',
+        badge: 'Нова гілка',
+        stepIndex: 10
+      },
+      {
+        id: 'node_2_4',
+        tuple: [2, 4],
+        label: '(2, 4)',
+        xPercent: 73,
+        yPercent: 51,
+        parent: 'node_2',
+        status: 'branch',
+        badge: null,
+        stepIndex: 12
+      },
+      {
+        id: 'node_2_4_1',
+        tuple: [2, 4, 1],
+        label: '(2, 4, 1)',
+        xPercent: 73,
+        yPercent: 73,
+        parent: 'node_2_4',
+        status: 'branch',
+        badge: null,
+        stepIndex: 13
+      },
+      {
+        id: 'node_2_4_1_3',
+        tuple: [2, 4, 1, 3],
+        label: '(2, 4, 1, 3)',
+        xPercent: 73,
+        yPercent: 93,
+        parent: 'node_2_4_1',
+        status: 'solution',
+        badge: '✓ Розв’язок',
+        stepIndex: 15
+      }
+    ];
+
+    /*************************************************************************
+     * 2. ДЕТАЛЬНІ КРОКИ СИМУЛЯТОРА (16 мікрокроків по всьому дереву)
+     *************************************************************************/
+    const SIMULATOR_STEPS = [
+      {
+        nodeId: 'node_root',
+        queens: [],
+        activeCol: 1,
+        scanCell: null,
+        scanStatus: null,
+        deadEndCol: null,
+        backtrackFrom: null,
+        badgeText: 'Початковий стан λ',
+        badgeType: 'info',
+        explanation: 'Починаємо з порожньої шахівниці <strong>λ</strong>. Алгоритм рухається по стовпцях зліва направо (1 → 4) і в кожному стовпці шукає безпечну клітинку зверху вниз.'
+      },
+      {
+        nodeId: 'node_1',
+        queens: [1],
+        activeCol: 1,
+        scanCell: { col: 1, row: 1 },
+        scanStatus: 'safe',
+        deadEndCol: null,
+        backtrackFrom: null,
+        badgeText: 'Стовпець 1 → Ставимо ферзя в Рядок 1',
+        badgeType: 'success',
+        explanation: 'У <strong>1-му стовпці</strong> перевіряємо найверхню клітинку (рядок 1). На дошці ще немає інших ферзів, тому ставимо першого ферзя. Отримуємо вузол <strong>(1)</strong>.'
+      },
+      {
+        nodeId: 'node_1',
+        queens: [1],
+        activeCol: 2,
+        scanCell: { col: 2, row: 1 },
+        scanStatus: 'conflict',
+        deadEndCol: null,
+        backtrackFrom: null,
+        badgeText: 'Стовпець 2: Перевірка рядка 1 ❌',
+        badgeType: 'conflict',
+        explanation: 'Переходимо у <strong>2-й стовпець</strong> і перевіряємо клітинки зверху вниз. <strong>Рядок 1</strong> зайнятий: його б’є по горизонталі ферзь зі стовпця 1 (рядок 1).'
+      },
+      {
+        nodeId: 'node_1',
+        queens: [1],
+        activeCol: 2,
+        scanCell: { col: 2, row: 2 },
+        scanStatus: 'conflict',
+        deadEndCol: null,
+        backtrackFrom: null,
+        badgeText: 'Стовпець 2: Перевірка рядка 2 ❌',
+        badgeType: 'conflict',
+        explanation: 'Спускаємося нижче у <strong>2-му стовпці</strong>: перевіряємо <strong>Рядок 2</strong>. Тут теж конфлікт — клітинку б’є по діагоналі ферзь зі стовпця 1 (рядок 1).'
+      },
+      {
+        nodeId: 'node_1_3',
+        queens: [1, 3],
+        activeCol: 2,
+        scanCell: { col: 2, row: 3 },
+        scanStatus: 'safe',
+        deadEndCol: null,
+        backtrackFrom: null,
+        badgeText: 'Стовпець 2 → Ставимо ферзя в Рядок 3',
+        badgeType: 'success',
+        explanation: 'Перевіряємо <strong>Рядок 3</strong> у 2-му стовпці — клітинка вільна від ударів! Ставимо другого ферзя. Переходимо у вузол дерева <strong>(1, 3)</strong>.'
+      },
+      {
+        nodeId: 'node_1_3',
+        queens: [1, 3],
+        activeCol: 3,
+        scanCell: null,
+        scanStatus: 'deadend',
+        deadEndCol: 3,
+        backtrackFrom: null,
+        badgeText: '🛑 Глухий кут у 3-му стовпці!',
+        badgeType: 'danger',
+        explanation: 'Переходимо у <strong>3-й стовпець</strong>, але всі 4 клітинки під боєм! Рядок 1 б’є перший ферзь (горизонталь), рядки 2, 3, 4 б’є другий ферзь зі стовпця 2 (діагоналі та горизонталь).'
+      },
+      {
+        nodeId: 'node_1_4',
+        queens: [1, 4],
+        activeCol: 2,
+        scanCell: { col: 2, row: 4 },
+        scanStatus: 'safe',
+        deadEndCol: null,
+        backtrackFrom: { fromNode: 'node_1_3', toNode: 'node_1_4' },
+        badgeText: '↩ Бектрекінг (Відкат) у Стовпець 2 → (1, 4)',
+        badgeType: 'warning',
+        explanation: '<strong>Повертаємося (бектрекінг)</strong> у 2-й стовпець до попереднього ферзя (який стояв у рядку 3) і зсовуємо його на наступний рядок нижче — <strong>Рядок 4</strong>. Новий стан: <strong>(1, 4)</strong>.'
+      },
+      {
+        nodeId: 'node_1_4',
+        queens: [1, 4],
+        activeCol: 3,
+        scanCell: { col: 3, row: 1 },
+        scanStatus: 'conflict',
+        deadEndCol: null,
+        backtrackFrom: null,
+        badgeText: 'Стовпець 3: Перевірка рядка 1 ❌',
+        badgeType: 'conflict',
+        explanation: 'Після переставляння ферзя на (1, 4) знову пробуємо <strong>3-й стовпець</strong> зверху вниз. <strong>Рядок 1</strong> під боєм першого ферзя по горизонталі.'
+      },
+      {
+        nodeId: 'node_1_4_2',
+        queens: [1, 4, 2],
+        activeCol: 3,
+        scanCell: { col: 3, row: 2 },
+        scanStatus: 'safe',
+        deadEndCol: null,
+        backtrackFrom: null,
+        badgeText: 'Стовпець 3 → Ставимо ферзя в Рядок 2',
+        badgeType: 'success',
+        explanation: 'У <strong>3-му стовпці Рядок 2</strong> тепер відкритий! Ставимо третього ферзя. Ми спустилися у вузол дерева <strong>(1, 4, 2)</strong>.'
+      },
+      {
+        nodeId: 'node_1_4_2',
+        queens: [1, 4, 2],
+        activeCol: 4,
+        scanCell: null,
+        scanStatus: 'deadend',
+        deadEndCol: 4,
+        backtrackFrom: null,
+        badgeText: '🛑 Глухий кут у 4-му стовпці!',
+        badgeType: 'danger',
+        explanation: 'Намагаємося поставити 4-го ферзя у <strong>4-му стовпці</strong>, але всі клітинки (1, 2, 3, 4) прострілюються вже виставленими ферзями <strong>(1, 4, 2)</strong>! Потрібен глибокий відкат.'
+      },
+      {
+        nodeId: 'node_2',
+        queens: [2],
+        activeCol: 1,
+        scanCell: { col: 1, row: 2 },
+        scanStatus: 'safe',
+        deadEndCol: null,
+        backtrackFrom: { fromNode: 'node_1_4_2', toNode: 'node_2' },
+        badgeText: '↩ Глибокий відкат аж до 1-го стовпця → (2)',
+        badgeType: 'warning',
+        explanation: 'У 3-му стовпці нижче рядка 2 клітинки 3 і 4 під боєм. У 2-му стовпці рядок 4 був останнім. Тому <strong>відкочуємося аж до 1-го стовпця</strong> і переставляємо 1-го ферзя у <strong>Рядок 2</strong>! Стан: <strong>(2)</strong>.'
+      },
+      {
+        nodeId: 'node_2',
+        queens: [2],
+        activeCol: 2,
+        scanCell: { col: 2, row: 3 },
+        scanStatus: 'conflict',
+        deadEndCol: null,
+        backtrackFrom: null,
+        badgeText: 'Стовпець 2: Рядки 1, 2, 3 під боєм ❌',
+        badgeType: 'conflict',
+        explanation: 'Переходимо у <strong>2-й стовпець</strong> і перевіряємо зверху вниз: ферзь із рядка 2 б’є сусідні клітинки <strong>1</strong> (діагональ), <strong>2</strong> (горизонталь) та <strong>3</strong> (діагональ).'
+      },
+      {
+        nodeId: 'node_2_4',
+        queens: [2, 4],
+        activeCol: 2,
+        scanCell: { col: 2, row: 4 },
+        scanStatus: 'safe',
+        deadEndCol: null,
+        backtrackFrom: null,
+        badgeText: 'Стовпець 2 → Ставимо ферзя в Рядок 4',
+        badgeType: 'success',
+        explanation: 'Перевіряємо <strong>Рядок 4</strong> у 2-му стовпці — безпечно! Ставимо другого ферзя та переходимо у вузол <strong>(2, 4)</strong>.'
+      },
+      {
+        nodeId: 'node_2_4_1',
+        queens: [2, 4, 1],
+        activeCol: 3,
+        scanCell: { col: 3, row: 1 },
+        scanStatus: 'safe',
+        deadEndCol: null,
+        backtrackFrom: null,
+        badgeText: 'Стовпець 3 → Рядок 1 одразу вільний!',
+        badgeType: 'success',
+        explanation: 'Переходимо у <strong>3-й стовпець</strong> і починаємо з найверхньої клітинки — <strong>Рядок 1</strong>. Жоден із попередніх ферзів (2, 4) її не б’є! Ставимо 3-го ферзя: стан <strong>(2, 4, 1)</strong>.'
+      },
+      {
+        nodeId: 'node_2_4_1',
+        queens: [2, 4, 1],
+        activeCol: 4,
+        scanCell: { col: 4, row: 2 },
+        scanStatus: 'conflict',
+        deadEndCol: null,
+        backtrackFrom: null,
+        badgeText: 'Стовпець 4: Рядки 1 та 2 під боєм ❌',
+        badgeType: 'conflict',
+        explanation: 'Переходимо у фінальний <strong>4-й стовпець</strong>. Перевіряємо зверху вниз: <strong>Рядок 1</strong> б’є 3-й ферзь по горизонталі, а <strong>Рядок 2</strong> б’ють 1-й та 3-й ферзі.'
+      },
+      {
+        nodeId: 'node_2_4_1_3',
+        queens: [2, 4, 1, 3],
+        activeCol: 4,
+        scanCell: { col: 4, row: 3 },
+        scanStatus: 'safe',
+        deadEndCol: null,
+        backtrackFrom: null,
+        badgeText: '🎉 Розв’язок знайдено: (2, 4, 1, 3)!',
+        badgeType: 'solution',
+        explanation: 'У <strong>4-му стовпці Рядок 3</strong> повністю безпечний! Ставимо 4-го ферзя. Отримано повний розв’язок <strong>(2, 4, 1, 3)</strong>: жодні два ферзі не стоять в одному рядку, стовпці чи діагоналі.'
+      }
+    ];
+
+    /*************************************************************************
+     * 3. ГЛОБАЛЬНИЙ СТАН ТРЕНАЖЕРА 4 ФЕРЗІВ
+     *************************************************************************/
+    let appMode = 'simulator'; // 'simulator' | 'practice'
+    let currentStepIdx = 0;
+    let showAttackRays = true;
+    let markerStyle = 'both'; // 'both' (♕ + ×) | 'cross' (× як у підручнику)
+    let autoPlayTimer = null;
+    let autoPlayDelay = 1200;
+
+    let practiceQueens = [null, null, null, null];
+    let practiceConflictCell = null;
+    let hoveredCell = null;
+
+    function getActiveQueensList() {
+      if (appMode === 'simulator') {
+        const step = SIMULATOR_STEPS[currentStepIdx];
+        return step.queens.map((row, idx) => ({ col: idx + 1, row }));
+      } else {
+        const list = [];
+        practiceQueens.forEach((row, idx) => {
+          if (row !== null) list.push({ col: idx + 1, row });
+        });
+        return list;
+      }
+    }
+
+    function getAttackersForCell(targetCol, targetRow, queensList) {
+      const attackers = [];
+      for (const q of queensList) {
+        if (q.col === targetCol && q.row === targetRow) continue;
+        if (appMode === 'simulator' && q.col >= targetCol) continue;
+        if (appMode === 'practice' && q.col === targetCol) continue;
+
+        const sameRow = q.row === targetRow;
+        const sameCol = q.col === targetCol;
+        const sameDiag = Math.abs(q.col - targetCol) === Math.abs(q.row - targetRow);
+
+        if (sameRow || sameCol || sameDiag) {
+          let type = 'діагоналі';
+          if (sameRow) type = 'горизонталі (рядку ' + q.row + ')';
+          else if (sameCol) type = 'вертикалі';
+          attackers.push({ col: q.col, row: q.row, type });
+        }
+      }
+      return attackers;
+    }
+
+    function renderBoard() {
+      const gridEl = document.getElementById('boardGrid');
+      if (!gridEl) return;
+      gridEl.innerHTML = '';
+
+      const queensList = getActiveQueensList();
+      const step = SIMULATOR_STEPS[currentStepIdx];
+
+      let activeCol = null;
+      if (appMode === 'simulator') {
+        activeCol = step.activeCol;
+      } else {
+        const firstEmpty = practiceQueens.findIndex(r => r === null);
+        activeCol = firstEmpty !== -1 ? firstEmpty + 1 : 4;
+      }
+
+      for (let c = 1; c <= 4; c++) {
+        const headerEl = document.getElementById(`colHeader${c}`);
+        if (!headerEl) continue;
+        if (c === activeCol) {
+          headerEl.className = 'text-center font-mono text-xs py-1 rounded-md bg-indigo-500/30 text-indigo-200 border border-indigo-400 font-bold shadow transition-all';
+        } else {
+          headerEl.className = 'text-center font-mono text-xs py-1 rounded-md bg-slate-800/70 text-slate-400 border border-slate-700/60 transition-all';
+        }
+      }
+
+      let focusTargetCell = hoveredCell;
+      if (!focusTargetCell && appMode === 'simulator' && step.scanCell && step.scanStatus === 'conflict') {
+        focusTargetCell = step.scanCell;
+      }
+      if (!focusTargetCell && appMode === 'practice' && practiceConflictCell) {
+        focusTargetCell = practiceConflictCell;
+      }
+
+      const highlightedAttackers = focusTargetCell
+        ? getAttackersForCell(focusTargetCell.col, focusTargetCell.row, queensList)
+        : [];
+
+      for (let row = 1; row <= 4; row++) {
+        for (let col = 1; col <= 4; col++) {
+          const isLightSquare = (row + col) % 2 === 0;
+          const queenHere = queensList.find(q => q.col === col && q.row === row);
+          const attackers = getAttackersForCell(col, row, queensList);
+          const isUnderAttack = !queenHere && attackers.length > 0;
+          const isAttackerHighlighted = highlightedAttackers.some(a => a.col === col && a.row === row);
+
+          const isScannerHere =
+            appMode === 'simulator' &&
+            step.scanCell &&
+            step.scanCell.col === col &&
+            step.scanCell.row === row;
+
+          const isDeadEndCol =
+            appMode === 'simulator' &&
+            step.deadEndCol === col;
+
+          const cellBtn = document.createElement('button');
+          cellBtn.type = 'button';
+          cellBtn.dataset.col = col;
+          cellBtn.dataset.row = row;
+
+          let baseClasses = 'relative w-full h-full rounded-xl flex flex-col items-center justify-center transition-all duration-150 border ';
+          if (isLightSquare) {
+            baseClasses += 'bg-slate-800/90 border-slate-700/80 ';
+          } else {
+            baseClasses += 'bg-slate-900/95 border-slate-800/90 ';
+          }
+
+          if (queenHere) {
+            const isSolutionState = queensList.length === 4 && checkFullBoardValid(queensList);
+            if (isSolutionState) {
+              baseClasses = 'relative w-full h-full rounded-xl flex flex-col items-center justify-center transition-all duration-200 bg-emerald-500/25 border-2 border-emerald-400 shadow-lg shadow-emerald-500/20 ';
+            } else {
+              baseClasses = 'relative w-full h-full rounded-xl flex flex-col items-center justify-center transition-all duration-200 bg-indigo-500/30 border-2 border-indigo-400 shadow-lg shadow-indigo-500/20 ';
+            }
+          } else if (isUnderAttack && showAttackRays) {
+            baseClasses = 'relative w-full h-full rounded-xl flex flex-col items-center justify-center transition-all duration-150 bg-rose-950/55 border border-rose-500/50 hover:bg-rose-900/60 ';
+          } else if (col === activeCol) {
+            baseClasses += 'ring-1 ring-indigo-400/30 hover:border-indigo-400/70 ';
+          }
+
+          if (isScannerHere) {
+            if (step.scanStatus === 'conflict') {
+              baseClasses += 'ring-2 ring-amber-400 bg-rose-500/35 border-amber-300 z-20 scale-[1.03] ';
+            } else if (step.scanStatus === 'safe') {
+              baseClasses += 'ring-2 ring-emerald-400 z-20 scale-[1.03] ';
+            }
+          }
+
+          if (isDeadEndCol) {
+            baseClasses += 'ring-2 ring-rose-500 bg-rose-900/60 border-rose-400 animate-pulse ';
+          }
+
+          if (isAttackerHighlighted) {
+            baseClasses += 'attacker-highlight ';
+          }
+
+          if (
+            appMode === 'practice' &&
+            practiceConflictCell &&
+            practiceConflictCell.col === col &&
+            practiceConflictCell.row === row
+          ) {
+            baseClasses += 'shake-cell ring-2 ring-rose-500 bg-rose-600/40 ';
+          }
+
+          cellBtn.className = baseClasses;
+
+          const coordSpan = document.createElement('span');
+          coordSpan.className = 'absolute top-1 left-1.5 font-mono text-[9px] text-slate-400/75 leading-none';
+          coordSpan.textContent = `${row}`;
+          cellBtn.appendChild(coordSpan);
+
+          if (queenHere) {
+            const queenContent = document.createElement('div');
+            queenContent.className = 'flex flex-col items-center justify-center leading-none';
+            if (markerStyle === 'both') {
+              queenContent.innerHTML = `
+                <span class="text-2xl sm:text-3xl text-white drop-shadow">♕</span>
+                <span class="text-[10px] font-mono font-bold text-indigo-200 -mt-0.5">× (${col},${row})</span>
+              `;
+            } else {
+              queenContent.innerHTML = `
+                <span class="text-2xl sm:text-3xl font-mono font-extrabold text-white drop-shadow">×</span>
+                <span class="text-[10px] font-mono text-indigo-200">р.${row}</span>
+              `;
+            }
+            cellBtn.appendChild(queenContent);
+          } else if (isUnderAttack && showAttackRays) {
+            const targetIcon = document.createElement('div');
+            targetIcon.className = 'flex flex-col items-center justify-center';
+            targetIcon.innerHTML = `
+              <span class="w-5 h-5 rounded-full bg-rose-500/20 border border-rose-400/60 flex items-center justify-center text-rose-300 text-xs font-bold">✕</span>
+            `;
+            cellBtn.appendChild(targetIcon);
+          } else if (appMode === 'practice') {
+            const hintPlus = document.createElement('span');
+            hintPlus.className = 'opacity-0 hover:opacity-60 text-xs font-mono text-indigo-300 transition-opacity flex items-center justify-center w-full h-full';
+            hintPlus.textContent = '+';
+            cellBtn.appendChild(hintPlus);
+          }
+
+          cellBtn.addEventListener('mouseenter', () => handleCellHover(col, row, attackers, queenHere));
+          cellBtn.addEventListener('mouseleave', () => handleCellLeave());
+          cellBtn.addEventListener('click', () => handleCellClick(col, row, attackers, queenHere));
+
+          gridEl.appendChild(cellBtn);
+        }
+      }
+
+      renderAttackRaysSvg(queensList, focusTargetCell);
+    }
+
+    function renderAttackRaysSvg(queensList, focusTargetCell) {
+      const svg = document.getElementById('boardRaysSvg');
+      if (!svg) return;
+      svg.innerHTML = '';
+
+      if (!showAttackRays && !focusTargetCell) return;
+
+      const cellCenter = (col, row) => ({
+        x: (col - 1) * 100 + 50,
+        y: (row - 1) * 100 + 50
+      });
+
+      const specificAttackers = focusTargetCell
+        ? getAttackersForCell(focusTargetCell.col, focusTargetCell.row, queensList)
+        : [];
+
+      if (showAttackRays) {
+        const directions = [
+          { dc: 1, dr: 0 },
+          { dc: 1, dr: 1 },
+          { dc: 1, dr: -1 }
+        ];
+
+        for (const q of queensList) {
+          const start = cellCenter(q.col, q.row);
+
+          for (const dir of directions) {
+            let lastCol = q.col;
+            let lastRow = q.row;
+            let c = q.col + dir.dc;
+            let r = q.row + dir.dr;
+
+            while (c >= 1 && c <= 4 && r >= 1 && r <= 4) {
+              lastCol = c;
+              lastRow = r;
+              c += dir.dc;
+              r += dir.dr;
+            }
+
+            if (lastCol !== q.col || lastRow !== q.row) {
+              const end = cellCenter(lastCol, lastRow);
+              const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+              line.setAttribute('x1', start.x);
+              line.setAttribute('y1', start.y);
+              line.setAttribute('x2', end.x);
+              line.setAttribute('y2', end.y);
+              line.setAttribute('stroke', 'rgba(244, 63, 94, 0.38)');
+              line.setAttribute('stroke-width', '5');
+              line.setAttribute('stroke-dasharray', '7 5');
+              line.setAttribute('stroke-linecap', 'round');
+              line.setAttribute('class', 'attack-ray');
+              svg.appendChild(line);
+            }
+          }
+        }
+      }
+
+      if (focusTargetCell && specificAttackers.length > 0) {
+        const targetPt = cellCenter(focusTargetCell.col, focusTargetCell.row);
+        for (const att of specificAttackers) {
+          const startPt = cellCenter(att.col, att.row);
+          const highlightLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          highlightLine.setAttribute('x1', startPt.x);
+          highlightLine.setAttribute('y1', startPt.y);
+          highlightLine.setAttribute('x2', targetPt.x);
+          highlightLine.setAttribute('y2', targetPt.y);
+          highlightLine.setAttribute('stroke', '#fb7185');
+          highlightLine.setAttribute('stroke-width', '8');
+          highlightLine.setAttribute('stroke-linecap', 'round');
+          svg.appendChild(highlightLine);
+
+          const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          circle.setAttribute('cx', targetPt.x);
+          circle.setAttribute('cy', targetPt.y);
+          circle.setAttribute('r', '14');
+          circle.setAttribute('fill', 'rgba(244, 63, 94, 0.25)');
+          circle.setAttribute('stroke', '#fda4af');
+          circle.setAttribute('stroke-width', '2.5');
+          svg.appendChild(circle);
+        }
+      }
+    }
+
+    function checkFullBoardValid(queensList) {
+      if (queensList.length !== 4) return false;
+      for (let i = 0; i < queensList.length; i++) {
+        for (let j = i + 1; j < queensList.length; j++) {
+          const q1 = queensList[i];
+          const q2 = queensList[j];
+          if (
+            q1.row === q2.row ||
+            q1.col === q2.col ||
+            Math.abs(q1.col - q2.col) === Math.abs(q1.row - q2.row)
+          ) {
+            return false;
+          }
+        }
+      }
+      return true;
+    }
+
+    function handleCellHover(col, row, attackers, queenHere) {
+      const hintLabel = document.getElementById('hoverHintLabel');
+      if (!queenHere && attackers.length > 0) {
+        hoveredCell = { col, row };
+        const details = attackers
+          .map(a => `ферзь (стовп. ${a.col}, ряд. ${a.row}) по ${a.type}`)
+          .join('; ');
+        hintLabel.innerHTML = `<span class="text-rose-300 font-semibold not-italic">⚡ Клітинку (${col}, ${row}) б'є: ${details}</span>`;
+        renderBoard();
+      } else if (queenHere) {
+        hoveredCell = null;
+        hintLabel.innerHTML = `<span class="text-indigo-300 not-italic">♕ Ферзь у стовпці ${col}, рядку ${row}</span>`;
+      } else {
+        hoveredCell = null;
+        hintLabel.innerHTML = `<span class="text-emerald-300/90 not-italic">✓ Клітинка (стовп. ${col}, ряд. ${row}) вільна від бою</span>`;
+      }
+    }
+
+    function handleCellLeave() {
+      if (hoveredCell !== null) {
+        hoveredCell = null;
+        renderBoard();
+      }
+      const hintLabel = document.getElementById('hoverHintLabel');
+      if (hintLabel) {
+        hintLabel.textContent = 'Наведіть на червону клітинку, щоб побачити, хто її б\'є';
+      }
+    }
+
+    function handleCellClick(col, row, attackers, queenHere) {
+      if (appMode === 'simulator') {
+        if (!queenHere && attackers.length > 0) {
+          const details = attackers
+            .map(a => `ферзь зі стовпця ${a.col} (рядок ${a.row}) по ${a.type}`)
+            .join(' та ');
+          updateTelemetryBox(
+            `Чому клітинка (Стовпець ${col}, Рядок ${row}) заборонена?`,
+            `❌ Сюди не можна ставити ферзя: цю позицію прострілює <strong>${details}</strong>.`,
+            'conflict'
+          );
+          playTone('deadend');
+          return;
+        }
+        return;
+      }
+
+      practiceConflictCell = null;
+
+      if (practiceQueens[col - 1] === row) {
+        for (let c = col - 1; c < 4; c++) {
+          practiceQueens[c] = null;
+        }
+        playTone('backtrack');
+        updatePracticeUI(`Ферзя зі стовпця ${col} прибрано. Продовжуйте пошук.`);
+        return;
+      }
+
+      const firstEmptyCol = practiceQueens.findIndex(r => r === null) + 1;
+      if (firstEmptyCol > 0 && col > firstEmptyCol) {
+        updateTelemetryBox(
+          'Дотримуйтесь порядку стовпців зліва направо',
+          `За алгоритмом спочатку потрібно поставити ферзя у <strong>Стовпець ${firstEmptyCol}</strong>, а потім переходити далі.`,
+          'warning'
+        );
+        return;
+      }
+
+      const tempQueens = [];
+      for (let c = 1; c < col; c++) {
+        if (practiceQueens[c - 1] !== null) {
+          tempQueens.push({ col: c, row: practiceQueens[c - 1] });
+        }
+      }
+
+      const conflicts = getAttackersForCell(col, row, tempQueens);
+      if (conflicts.length > 0) {
+        practiceConflictCell = { col, row };
+        const details = conflicts
+          .map(a => `ферзь у стовпці ${a.col}, рядку ${a.row} (по ${a.type})`)
+          .join(' та ');
+        updateTelemetryBox(
+          `❌ Конфлікт у клітинці (Стовпець ${col}, Рядок ${row})!`,
+          `Цей хід неможливий: клітинку б'є <strong>${details}</strong>. Спробуйте інший рядок нижче або зробіть відкат у попередній стовпець.`,
+          'danger'
+        );
+        playTone('deadend');
+        renderBoard();
+        setTimeout(() => {
+          practiceConflictCell = null;
+          renderBoard();
+        }, 650);
+        return;
+      }
+
+      practiceQueens[col - 1] = row;
+      for (let c = col; c < 4; c++) {
+        practiceQueens[c] = null;
+      }
+      playTone('step');
+      updatePracticeUI();
+    }
+
+    function updatePracticeUI(customMsg) {
+      const tuple = practiceQueens.filter(r => r !== null);
+      const queensList = getActiveQueensList();
+
+      if (tuple.length === 4 && checkFullBoardValid(queensList)) {
+        const tupleStr = `(${tuple.join(', ')})`;
+        playTone('win');
+        updateTelemetryBox(
+          `🎉 Вітаємо! Ви знайшли розв'язок ${tupleStr}!`,
+          tupleStr === '(2, 4, 1, 3)'
+            ? `Це основний розв'язок <strong>(2, 4, 1, 3)</strong>, наведений на Рис. 5.30 у підручнику!`
+            : `Ви знайшли другий (дзеркально-симетричний) розв'язок задачі для N=4: <strong>${tupleStr}</strong>!`,
+          'solution'
+        );
+      } else if (tuple.length < 4) {
+        const nextCol = tuple.length + 1;
+        const safeRowsInNext = [];
+        for (let r = 1; r <= 4; r++) {
+          if (getAttackersForCell(nextCol, r, queensList).length === 0) {
+            safeRowsInNext.push(r);
+          }
+        }
+
+        if (safeRowsInNext.length === 0) {
+          playTone('deadend');
+          updateTelemetryBox(
+            `🛑 Глухий кут у стовпці ${nextCol} для стану (${tuple.join(', ')})!`,
+            `У <strong>${nextCol}-му стовпці</strong> всі 4 клітинки перебувають під боєм! Виконайте <strong>бектрекінг</strong>: клікніть у попередньому стовпці ${tuple.length} на рядок нижче.`,
+            'danger'
+          );
+        } else {
+          updateTelemetryBox(
+            `Хід прийнято: стан (${tuple.join(', ')})`,
+            customMsg || `Тепер оберіть безпечну клітинку у <strong>Стовпці ${nextCol}</strong> (перевіряйте зверху вниз: рядки 1 → 4).`,
+            'success'
+          );
+        }
+      }
+
+      renderBoard();
+      renderTree();
+      updateHeaderBadges(tuple);
+    }
+
+    function practiceUndo() {
+      for (let c = 3; c >= 0; c--) {
+        if (practiceQueens[c] !== null) {
+          practiceQueens[c] = null;
+          break;
+        }
+      }
+      playTone('backtrack');
+      updatePracticeUI('Останнього ферзя прибрано.');
+    }
+
+    function practiceClear() {
+      practiceQueens = [null, null, null, null];
+      practiceConflictCell = null;
+      updateTelemetryBox(
+        'Режим практики — Дошку очищено (λ)',
+        'Клікайте по клітинках 1-го стовпця зверху вниз, щоб почати розстановку 4 ферзів.',
+        'info'
+      );
+      renderBoard();
+      renderTree();
+      updateHeaderBadges([]);
+    }
+
+    function renderTree() {
+      const nodesLayer = document.getElementById('treeNodesLayer');
+      const edgesSvg = document.getElementById('treeEdgesSvg');
+      if (!nodesLayer || !edgesSvg) return;
+      nodesLayer.innerHTML = '';
+      edgesSvg.innerHTML = '';
+
+      let activeNodeId = null;
+      let currentTuple = [];
+      let backtrackArc = null;
+
+      if (appMode === 'simulator') {
+        const step = SIMULATOR_STEPS[currentStepIdx];
+        activeNodeId = step.nodeId;
+        currentTuple = step.queens;
+        backtrackArc = step.backtrackFrom;
+      } else {
+        currentTuple = practiceQueens.filter(r => r !== null);
+        const match = TREE_NODES.find(n => arraysEqual(n.tuple, currentTuple));
+        if (match) activeNodeId = match.id;
+      }
+
+      const activePathIds = new Set();
+      let curr = TREE_NODES.find(n => n.id === activeNodeId);
+      const pathNodesOrdered = [];
+      while (curr) {
+        activePathIds.add(curr.id);
+        pathNodesOrdered.unshift(curr);
+        curr = TREE_NODES.find(n => n.id === curr.parent);
+      }
+
+      renderPathBreadcrumbs(pathNodesOrdered, currentTuple);
+
+      for (const node of TREE_NODES) {
+        if (!node.parent) continue;
+        const parentNode = TREE_NODES.find(n => n.id === node.parent);
+        if (!parentNode) continue;
+
+        const x1 = (parentNode.xPercent / 100) * 700;
+        const y1 = (parentNode.yPercent / 100) * 490 + 28;
+        const x2 = (node.xPercent / 100) * 700;
+        const y2 = (node.yPercent / 100) * 490 - 28;
+
+        const isEdgeActive = activePathIds.has(node.id) && activePathIds.has(parentNode.id);
+
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', x1);
+        line.setAttribute('y1', y1);
+        line.setAttribute('x2', x2);
+        line.setAttribute('y2', y2);
+        line.setAttribute(
+          'stroke',
+          isEdgeActive
+            ? node.status === 'deadend'
+              ? '#f43f5e'
+              : '#6366f1'
+            : '#334155'
+        );
+        line.setAttribute('stroke-width', isEdgeActive ? '3' : '2');
+        edgesSvg.appendChild(line);
+      }
+
+      if (backtrackArc) {
+        const fromNode = TREE_NODES.find(n => n.id === backtrackArc.fromNode);
+        const toNode = TREE_NODES.find(n => n.id === backtrackArc.toNode);
+        if (fromNode && toNode) {
+          const x1 = (fromNode.xPercent / 100) * 700;
+          const y1 = (fromNode.yPercent / 100) * 490;
+          const x2 = (toNode.xPercent / 100) * 700;
+          const y2 = (toNode.yPercent / 100) * 490;
+          const midX = (x1 + x2) / 2;
+          const midY = Math.min(y1, y2) - 42;
+
+          const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+          path.setAttribute('d', `M ${x1} ${y1} Q ${midX} ${midY} ${x2} ${y2}`);
+          path.setAttribute('fill', 'none');
+          path.setAttribute('stroke', '#f59e0b');
+          path.setAttribute('stroke-width', '2.5');
+          path.setAttribute('stroke-dasharray', '6 4');
+          edgesSvg.appendChild(path);
+        }
+      }
+
+      for (const node of TREE_NODES) {
+        const isCurrent = node.id === activeNodeId;
+        const isInPath = activePathIds.has(node.id);
+        const isVisitedInSim = appMode === 'simulator' && currentStepIdx >= node.stepIndex;
+
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.onclick = () => selectTreeNodeById(node.id);
+        card.style.left = `${node.xPercent}%`;
+        card.style.top = `${node.yPercent}%`;
+
+        let borderClass = 'border-slate-700/90 bg-slate-900/95 hover:border-slate-500 ';
+        if (isCurrent) {
+          if (node.status === 'deadend') {
+            borderClass = 'border-2 border-rose-400 bg-rose-950/90 ring-4 ring-rose-500/25 scale-105 z-20 ';
+          } else if (node.status === 'solution') {
+            borderClass = 'border-2 border-emerald-400 bg-emerald-950/90 ring-4 ring-emerald-500/25 scale-105 z-20 ';
+          } else {
+            borderClass = 'border-2 border-indigo-400 bg-slate-900 ring-4 ring-indigo-500/25 scale-105 z-20 ';
+          }
+        } else if (isInPath) {
+          borderClass = 'border-indigo-500/70 bg-slate-900/95 ';
+        } else if (isVisitedInSim && node.status === 'deadend') {
+          borderClass = 'border-rose-500/40 bg-rose-950/30 opacity-85 ';
+        }
+
+        card.className = `absolute -translate-x-1/2 -translate-y-1/2 p-1.5 rounded-xl border transition-all duration-200 flex flex-col items-center shadow-lg cursor-pointer group ${borderClass}`;
+
+        const miniGrid = document.createElement('div');
+        miniGrid.className = 'grid grid-cols-4 grid-rows-4 w-[52px] h-[52px] sm:w-[56px] sm:h-[56px] border border-slate-600 bg-slate-950 rounded overflow-hidden';
+
+        for (let r = 1; r <= 4; r++) {
+          for (let c = 1; c <= 4; c++) {
+            const hasQueen = node.tuple[c - 1] === r;
+            const cell = document.createElement('div');
+            cell.className = `border-[0.5px] border-slate-700/70 flex items-center justify-center text-[10px] font-mono font-bold leading-none ${
+              hasQueen
+                ? node.status === 'solution'
+                  ? 'bg-emerald-500/30 text-emerald-200'
+                  : node.status === 'deadend'
+                  ? 'bg-rose-500/30 text-rose-200'
+                  : 'bg-indigo-500/30 text-white'
+                : (r + c) % 2 === 0
+                ? 'bg-slate-900/70'
+                : 'bg-slate-950'
+            }`;
+            cell.textContent = hasQueen ? '×' : '';
+            miniGrid.appendChild(cell);
+          }
+        }
+        card.appendChild(miniGrid);
+
+        const labelSpan = document.createElement('div');
+        labelSpan.className = `mt-1 font-mono text-[11px] font-bold leading-none ${
+          isCurrent ? 'text-white' : 'text-slate-300 group-hover:text-white'
+        }`;
+        labelSpan.textContent = node.label;
+        card.appendChild(labelSpan);
+
+        if (node.badge) {
+          const badgeEl = document.createElement('span');
+          let badgeColor = 'bg-slate-800 text-slate-300 border-slate-700';
+          if (node.status === 'deadend') {
+            badgeColor = 'bg-rose-500/20 text-rose-300 border-rose-500/40';
+          } else if (node.status === 'solution') {
+            badgeColor = 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40';
+          } else if (node.id === 'node_1_4' || node.id === 'node_2') {
+            badgeColor = 'bg-amber-500/20 text-amber-300 border-amber-500/40';
+          }
+          badgeEl.className = `mt-0.5 px-1.5 py-0.2 rounded text-[9px] font-semibold border ${badgeColor} whitespace-nowrap`;
+          badgeEl.textContent = node.badge;
+          card.appendChild(badgeEl);
+        }
+
+        nodesLayer.appendChild(card);
+      }
+    }
+
+    function renderPathBreadcrumbs(pathNodesOrdered, currentTuple) {
+      const container = document.getElementById('treePathBreadcrumbs');
+      if (!container) return;
+      container.innerHTML = '';
+
+      if (pathNodesOrdered.length === 0) {
+        const customSpan = document.createElement('span');
+        customSpan.className = 'text-amber-300';
+        customSpan.textContent = `Власна гілка: (${currentTuple.join(', ')})`;
+        container.appendChild(customSpan);
+        return;
+      }
+
+      pathNodesOrdered.forEach((n, index) => {
+        if (index > 0) {
+          const arrow = document.createElement('span');
+          arrow.className = 'text-slate-600';
+          arrow.textContent = '→';
+          container.appendChild(arrow);
+        }
+
+        const pill = document.createElement('button');
+        pill.type = 'button';
+        pill.onclick = () => selectTreeNodeById(n.id);
+        const isLast = index === pathNodesOrdered.length - 1;
+        pill.className = `px-2 py-0.5 rounded-md transition ${
+          isLast
+            ? 'bg-indigo-500/25 text-indigo-200 border border-indigo-400/50 font-bold'
+            : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
+        }`;
+        pill.textContent = n.label;
+        container.appendChild(pill);
+      });
+    }
+
+    function syncSimulatorView() {
+      const step = SIMULATOR_STEPS[currentStepIdx];
+
+      updateHeaderBadges(step.queens);
+      updateTelemetryBox(step.badgeText, step.explanation, step.badgeType);
+
+      const stepCounter = document.getElementById('stepCounterBadge');
+      if (stepCounter) {
+        stepCounter.textContent = `Крок ${currentStepIdx} / ${SIMULATOR_STEPS.length - 1}`;
+      }
+
+      const prevBtn = document.getElementById('prevStepBtn');
+      if (prevBtn) {
+        prevBtn.disabled = currentStepIdx === 0;
+        prevBtn.classList.toggle('opacity-40', currentStepIdx === 0);
+      }
+
+      renderBoard();
+      renderTree();
+    }
+
+    function updateHeaderBadges(tuple) {
+      const tupleBadge = document.getElementById('currentTupleBadge');
+      const decodeBar = document.getElementById('tupleDecodeBar');
+      if (!tupleBadge || !decodeBar) return;
+
+      if (!tuple || tuple.length === 0) {
+        tupleBadge.textContent = 'λ (порожня дошка)';
+        decodeBar.innerHTML =
+          '<span>Кортеж <strong>λ</strong> (довжина 0): на шахівниці ще немає жодного ферзя.</span>';
+      } else {
+        tupleBadge.textContent = `(${tuple.join(', ')})`;
+        const parts = tuple.map(
+          (row, idx) =>
+            `<span class="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-slate-200">Стовп. ${idx + 1} → Ряд. <strong class="text-indigo-300">${row}</strong></span>`
+        );
+        decodeBar.innerHTML = parts.join(' ');
+      }
+    }
+
+    function updateTelemetryBox(title, htmlText, type) {
+      const box = document.getElementById('telemetryBox');
+      const badge = document.getElementById('telemetryBadge');
+      const text = document.getElementById('telemetryText');
+      if (!box || !badge || !text) return;
+
+      badge.textContent = title;
+      text.innerHTML = htmlText;
+
+      let badgeStyle = 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30';
+      let boxBorder = 'border-slate-800';
+
+      if (type === 'conflict') {
+        badgeStyle = 'bg-amber-500/20 text-amber-300 border-amber-500/40';
+        boxBorder = 'border-amber-500/40';
+      } else if (type === 'danger') {
+        badgeStyle = 'bg-rose-500/20 text-rose-300 border-rose-500/40';
+        boxBorder = 'border-rose-500/50';
+      } else if (type === 'warning') {
+        badgeStyle = 'bg-amber-500/20 text-amber-200 border-amber-400/50';
+        boxBorder = 'border-amber-500/40';
+      } else if (type === 'success') {
+        badgeStyle = 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40';
+        boxBorder = 'border-emerald-500/30';
+      } else if (type === 'solution') {
+        badgeStyle = 'bg-emerald-500/30 text-emerald-200 border-emerald-400';
+        boxBorder = 'border-emerald-400/70';
+      }
+
+      badge.className = `text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${badgeStyle}`;
+      box.className = `rounded-xl p-3 bg-slate-950/90 border transition-all min-h-[88px] flex flex-col justify-between ${boxBorder}`;
+    }
+
+    function stepForward() {
+      if (appMode !== 'simulator') setMode('simulator');
+      if (currentStepIdx < SIMULATOR_STEPS.length - 1) {
+        currentStepIdx++;
+        const step = SIMULATOR_STEPS[currentStepIdx];
+        if (step.badgeType === 'danger' || step.badgeType === 'conflict') playTone('deadend');
+        else if (step.badgeType === 'warning') playTone('backtrack');
+        else if (step.badgeType === 'solution') playTone('win');
+        else playTone('step');
+        syncSimulatorView();
+      } else {
+        stopAutoPlay();
+      }
+    }
+
+    function stepBackward() {
+      if (appMode !== 'simulator') setMode('simulator');
+      if (currentStepIdx > 0) {
+        currentStepIdx--;
+        playTone('backtrack');
+        syncSimulatorView();
+      }
+    }
+
+    function resetSimulator() {
+      stopAutoPlay();
+      playTone('step');
+      if (appMode === 'simulator') {
+        currentStepIdx = 0;
+        syncSimulatorView();
+      } else {
+        practiceClear();
+      }
+    }
+
+    function jumpToNextTreeNode() {
+      if (appMode !== 'simulator') setMode('simulator');
+      const currentNodeId = SIMULATOR_STEPS[currentStepIdx].nodeId;
+      const currentNodeOrderIdx = TREE_NODES.findIndex(n => n.id === currentNodeId);
+      const nextNode = TREE_NODES[(currentNodeOrderIdx + 1) % TREE_NODES.length];
+      currentStepIdx = nextNode.stepIndex;
+      playTone('step');
+      syncSimulatorView();
+    }
+
+    function selectTreeNodeById(nodeId) {
+      stopAutoPlay();
+      const targetNode = TREE_NODES.find(n => n.id === nodeId);
+      if (!targetNode) return;
+
+      if (targetNode.status === 'deadend') playTone('deadend');
+      else if (targetNode.status === 'solution') playTone('win');
+      else playTone('step');
+
+      if (appMode === 'simulator') {
+        currentStepIdx = targetNode.stepIndex;
+        syncSimulatorView();
+      } else {
+        practiceQueens = [null, null, null, null];
+        targetNode.tuple.forEach((r, idx) => {
+          practiceQueens[idx] = r;
+        });
+        updatePracticeUI(`Ви перейшли до вузла дерева ${targetNode.label}.`);
+      }
+    }
+
+    function toggleAutoPlay() {
+      if (autoPlayTimer) {
+        stopAutoPlay();
+      } else {
+        if (appMode !== 'simulator') setMode('simulator');
+        if (currentStepIdx >= SIMULATOR_STEPS.length - 1) {
+          currentStepIdx = 0;
+          syncSimulatorView();
+        }
+        document.getElementById('autoPlayIcon').textContent = '⏸';
+        document.getElementById('autoPlayText').textContent = 'Пауза';
+        autoPlayTimer = setInterval(() => {
+          if (currentStepIdx < SIMULATOR_STEPS.length - 1) {
+            stepForward();
+          } else {
+            stopAutoPlay();
+          }
+        }, autoPlayDelay);
+      }
+    }
+
+    function stopAutoPlay() {
+      if (autoPlayTimer) {
+        clearInterval(autoPlayTimer);
+        autoPlayTimer = null;
+      }
+      const icon = document.getElementById('autoPlayIcon');
+      const txt = document.getElementById('autoPlayText');
+      if (icon) icon.textContent = '▶';
+      if (txt) txt.textContent = 'Автопуск';
+    }
+
+    function updateSpeed(val) {
+      autoPlayDelay = 2600 - parseInt(val, 10);
+      if (autoPlayTimer) {
+        stopAutoPlay();
+        toggleAutoPlay();
+      }
+    }
+
+    function setMode(newMode) {
+      stopAutoPlay();
+      appMode = newMode;
+
+      const simBtn = document.getElementById('modeSimBtn');
+      const pracBtn = document.getElementById('modePracBtn');
+      const simControls = document.getElementById('simulatorControls');
+      const pracControls = document.getElementById('practiceControls');
+
+      if (newMode === 'simulator') {
+        simBtn.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold transition-all bg-indigo-600 text-white shadow';
+        pracBtn.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold transition-all text-slate-400 hover:text-slate-200';
+        simControls.classList.remove('hidden');
+        pracControls.classList.add('hidden');
+        pracControls.classList.remove('flex');
+        syncSimulatorView();
+      } else {
+        pracBtn.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold transition-all bg-indigo-600 text-white shadow';
+        simBtn.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold transition-all text-slate-400 hover:text-slate-200';
+        simControls.classList.add('hidden');
+        pracControls.classList.remove('hidden');
+        pracControls.classList.add('flex');
+        practiceClear();
+      }
+    }
+
+    function toggleAttackRays(checked) {
+      showAttackRays = checked;
+      renderBoard();
+    }
+
+    function toggleMarkerStyle() {
+      markerStyle = markerStyle === 'both' ? 'cross' : 'both';
+      document.getElementById('markerStyleLabel').textContent =
+        markerStyle === 'both' ? '♕ + ×' : '× (як у книзі)';
+      renderBoard();
+    }
+
+    function arraysEqual(a, b) {
+      if (a.length !== b.length) return false;
+      for (let i = 0; i < a.length; i++) {
+        if (a[i] !== b[i]) return false;
+      }
+      return true;
+    }
+
+    /* =========================================================================
+       INITIALIZE ALL 3 MODULES ON WINDOW LOAD
+       ========================================================================= */
+    window.onload = function () {
+      renderHamiltonian();
+      colApplyStep(0);
+      syncSimulatorView();
+    };
+  </script>
+</body>
+</html>
